@@ -246,17 +246,7 @@ fn parse_conversation_transcript(
             if stype == "USER_INPUT" {
                 let source = step.get_str("source").unwrap_or("");
                 if let Some(raw_c) = step.get_str("content") {
-                    if raw_c.contains("<SYSTEM_MESSAGE>") || raw_c.contains("<SUBAGENT_NOTIFICATION>") {
-                        // A background task or subagent just finished: any previous text was an intermediate wait status
-                        has_pending_running_task = false;
-                        cur_output_text.clear();
-                        continue;
-                    }
-
-                    let is_real_user_prompt =
-                        source == "USER_EXPLICIT" || raw_c.contains("<USER_REQUEST>");
-
-                    if is_real_user_prompt {
+                    if source == "USER_EXPLICIT" {
                         let clean = clean_user_request_tags(raw_c);
                         if !clean.is_empty() {
                             if !cur_prompt_text.is_empty() && !cur_output_text.is_empty() {
@@ -285,6 +275,11 @@ fn parse_conversation_transcript(
                             last_planner_had_tool_calls = false;
                             last_user_prompt = truncate_chars(&clean, 260);
                         }
+                    } else {
+                        // System notification (`source == "SYSTEM"`, e.g. background task wakeup):
+                        // clear any intermediate "waiting for task" message so we wait for the real final output
+                        has_pending_running_task = false;
+                        cur_output_text.clear();
                     }
                 }
             } else if stype == "SYSTEM_MESSAGE" {
