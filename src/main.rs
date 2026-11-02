@@ -52,8 +52,8 @@ use std::thread;
 use std::time::Duration;
 use telegram_bot::{
     ask_interactive_on_telegram, current_project_name, deliver_task_output_to_telegram,
-    generate_pairing_code, load_bot_config, new_shared_bot_state, spawn_telegram_worker, BotConfig,
-    SharedBotState,
+    generate_pairing_code, load_bot_config, new_shared_bot_state, spawn_telegram_worker,
+    sync_local_projects_and_topics, BotConfig, SharedBotState,
 };
 
 const DEFAULT_PORT: u16 = 8430;
@@ -115,11 +115,99 @@ fn main() {
     let state = new_shared_bot_state();
 
     match subcmd {
+        "start" => run_detached_start(&cfg, &state),
+        "stop" => run_stop_daemon(),
+        "status" => run_status_command(),
+        "sync" => {
+            let count = sync_local_projects_and_topics(&cfg, &state);
+            println!(
+                "✅ Sincronizzati {} thread/conversazioni dei progetti attuali su Telegram Forum Topics.",
+                count
+            );
+        }
         "pair" => run_pair_command(&cfg, &state),
         "notify" => run_notify_command(&cfg, &state, &args[2..]),
         "ask" => run_ask_command(&cfg, &state, &args[2..]),
         "invite" => run_invite_command(&cfg, &args[2..]),
         _ => run_daemon_server(cfg, state),
+    }
+}
+
+/// Spawns `telegram-harness-manager serve` as a completely detached background OS process
+/// (with `Stdio::null()` and `CREATE_NO_WINDOW | DETACHED_PROCESS` on Windows) and exits
+/// immediately so NO task remains hanging or visible inside Antigravity / Claude Code!
+fn run_detached_start(cfg: &BotConfig, state: &SharedBotState) {
+    // First, sync local project topics immediately
+    let synced = sync_local_projects_and_topics(cfg, state);
+
+    // Check if daemon is already listening on DEFAULT_PORT
+    let addr = format!("127.0.0.1:{}", DEFAULT_PORT);
+    if TcpStream::connect_timeout(&addr.parse().unwrap(), Duration::from_millis(250)).is_ok() {
+        println!(
+            "✅ Telegram Harness Manager è già attivo in background sulla porta {} ({} conversazioni sincronizzate).",
+            DEFAULT_PORT, synced
+        );
+        return;
+    }
+
+    let exe = env::current_exe().unwrap_or_else(|_| PathBuf::from("telegram-harness-manager"));
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg("serve")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // DETACHED_PROCESS (0x00000008) | CREATE_NO_WINDOW (0x08000000) | CREATE_NEW_PROCESS_GROUP (0x00000200)
+        cmd.creation_flags(0x08000208);
+    }
+
+    match cmd.spawn() {
+        Ok(child) => {
+            let _ = fs::create_dir_all(".thm");
+            let _ = fs::write(".thm/daemon.pid", child.id().to_string());
+            println!(
+                "🚀 Telegram Harness Manager avviato in background (PID: {}, Porta: {}, Topic sincronizzati: {}).",
+                child.id(),
+                DEFAULT_PORT,
+                synced
+            );
+        }
+        Err(e) => {
+            eprintln!("❌ Impossibile avviare il demone in background: {}", e);
+        }
+    }
+}
+
+fn run_stop_daemon() {
+    let _ = http_post_local("/api/internal/shutdown", "{}", 2);
+    if let Ok(pid_str) = fs::read_to_string(".thm/daemon.pid") {
+        let pid = pid_str.trim();
+        if !pid.is_empty() {
+            #[cfg(target_os = "windows")]
+            {
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/PID", pid])
+                    .output();
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                let _ = std::process::Command::new("kill").arg(pid).output();
+            }
+        }
+        let _ = fs::remove_file(".thm/daemon.pid");
+    }
+    println!("🛑 Demone Telegram Harness Manager arrestato.");
+}
+
+fn run_status_command() {
+    let addr = format!("127.0.0.1:{}", DEFAULT_PORT);
+    if TcpStream::connect_timeout(&addr.parse().unwrap(), Duration::from_millis(300)).is_ok() {
+        println!("🟢 Telegram Harness Manager: ONLINE (Porta {})", DEFAULT_PORT);
+    } else {
+        println!("⚪ Telegram Harness Manager: OFFLINE");
     }
 }
 
@@ -376,6 +464,10 @@ fn handle_http_client(mut stream: TcpStream, cfg: BotConfig, state: SharedBotSta
         }
         ("POST", "/api/internal/hook/stop") => {
             handle_hook_stop(&mut stream, &cfg, &state, &body);
+        }
+        ("POST", "/api/internal/shutdown") => {
+            send_json(&mut stream, 200, &Json::obj(vec![("ok", Json::Bool(true))]));
+            std::process::exit(0);
         }
         ("GET", _) => {
             serve_static_webapp(&mut stream, path);

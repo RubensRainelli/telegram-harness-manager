@@ -17,8 +17,9 @@ Always run `telegram-harness-manager pefl-check` first. If `STATUS: PEFL_APPROVA
 
 ## Quick Commands
 - **Check PEFL v1.0 Status**: `telegram-harness-manager pefl-check`
+- **Start Detached Daemon & Sync Topics (No Hanging Task)**: `telegram-harness-manager start`
+- **Sync Local Project Conversations to Telegram Topics**: `telegram-harness-manager sync`
 - **Pair PC with Telegram**: `telegram-harness-manager pair`
-- **Start Daemon / Bot Bridge**: `telegram-harness-manager serve`
 - **Send Final Task Output**: `telegram-harness-manager notify --project "<name>" --output "<summary>"`
 - **Ask Interactive Options**: `telegram-harness-manager ask --question "<text>" --options "Opt 1|Opt 2|Opt 3"`
 - **Generate Collaborator Invite**: `telegram-harness-manager invite --project "<name>" --role viewer|proposer|executor`

@@ -13,10 +13,13 @@
  * The full license can be found in the LICENSE file.
  */
 
-use crate::harnesses::{available_models_for_harness, dispatch_to_harness, PromptDispatchSpec, TaskCompletionSummary};
+use crate::harnesses::{
+    available_models_for_harness, dispatch_to_harness, scan_local_conversations,
+    PromptDispatchSpec, TaskCompletionSummary,
+};
 use crate::i18n::{resolve_locale, t};
 use crate::json::Json;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -215,16 +218,22 @@ pub fn new_shared_bot_state() -> SharedBotState {
 /// Generates a one-time cryptographic pairing code and deep-link for `@Your_Harness_Bot`
 pub fn generate_pairing_code(cfg: &BotConfig, state: &SharedBotState) -> (String, String) {
     let code = format!("{:06x}{:04x}", now_secs() & 0xFFFFFF, (now_millis() & 0xFFFF) as u32);
-    if let Ok(mut guard) = state.0.lock() {
+    let existing_owner = {
+        let mut guard = state.0.lock().unwrap();
         guard.active_pairing_code = Some(code.clone());
-    }
+        guard.owner_user_id
+    };
 
     let _ = fs::create_dir_all(".thm");
-    let record = Json::obj(vec![
+    let mut entries = vec![
         ("deviceToken", Json::Str(cfg.device_token.clone())),
         ("pairingCode", Json::Str(code.clone())),
         ("createdAt", Json::Number(now_secs() as f64)),
-    ]);
+    ];
+    if let Some(oid) = existing_owner {
+        entries.push(("ownerUserId", Json::Number(oid as f64)));
+    }
+    let record = Json::obj(entries);
     let _ = fs::write(".thm/device.json", record.stringify());
 
     // If in Cloud mode, also register the pairing code on the Telegram Serverless endpoint
@@ -256,6 +265,8 @@ pub fn spawn_telegram_worker(cfg: BotConfig, state: SharedBotState) {
                 "🤖 [Telegram Direct Bot Mode] Connected as {} (Multi-Topic & ACL Active)",
                 cfg.bot_name
             );
+            // Automatically discover and sync local projects & conversations into Telegram Forum Topics
+            let _ = sync_local_projects_and_topics(&cfg, &state);
             run_direct_telegram_polling_loop(cfg, state);
         } else {
             println!(
@@ -265,6 +276,138 @@ pub fn spawn_telegram_worker(cfg: BotConfig, state: SharedBotState) {
             run_cloud_bridge_polling_loop(cfg, state);
         }
     });
+}
+
+/// Scans real local conversations (`~/.gemini/antigravity/brain`) and ensures each one has
+/// its own dedicated Telegram Forum Topic (`createForumTopic`) with its Config Bar and latest status.
+pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -> usize {
+    if cfg.mode != "direct"
+        || cfg.bot_token.is_empty()
+        || cfg.bot_token == "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+    {
+        return 0;
+    }
+
+    let (owner_id, lang) = {
+        let guard = state.0.lock().unwrap();
+        let oid = match guard.owner_user_id {
+            Some(id) if id != 0 => id,
+            _ => return 0,
+        };
+        let loc = guard
+            .user_locales
+            .get(&oid)
+            .cloned()
+            .unwrap_or_else(|| cfg.default_locale.clone());
+        (oid, loc)
+    };
+
+    let _ = fs::create_dir_all(".thm");
+    let map_path = Path::new(".thm").join("topics_map.json");
+    let mut persisted_map: BTreeMap<String, i64> = BTreeMap::new();
+    if let Ok(raw) = fs::read_to_string(&map_path) {
+        if let Some(Json::Object(obj)) = Json::parse_opt(&raw) {
+            for (k, v) in obj {
+                if let Some(tid) = v.as_i64() {
+                    persisted_map.insert(k, tid);
+                }
+            }
+        }
+    }
+
+    // Clean up old test topic 1563967 if present and unmapped
+    if !persisted_map.values().any(|&v| v == 1563967) {
+        let _ = telegram_api_call(
+            &cfg.bot_token,
+            "deleteForumTopic",
+            &Json::obj(vec![
+                ("chat_id", Json::Number(owner_id as f64)),
+                ("message_thread_id", Json::Number(1563967.0)),
+            ]),
+        );
+    }
+
+    let discovered = scan_local_conversations(8);
+    let mut synced_count = 0usize;
+
+    for disc in discovered {
+        let topic_title = format!(
+            "📁 [{}] 💬 {}",
+            disc.project_name,
+            truncate_str(&disc.title, 42)
+        );
+
+        let mut thread_id = persisted_map.get(&disc.conversation_id).copied();
+        let mut is_new_topic = false;
+
+        if thread_id.is_none() {
+            if let Ok(res) = telegram_api_call(
+                &cfg.bot_token,
+                "createForumTopic",
+                &Json::obj(vec![
+                    ("chat_id", Json::Number(owner_id as f64)),
+                    ("name", Json::Str(topic_title.clone())),
+                ]),
+            ) {
+                if let Some(tid) = res.get("result").and_then(|r| r.get_i64("message_thread_id")) {
+                    thread_id = Some(tid);
+                    persisted_map.insert(disc.conversation_id.clone(), tid);
+                    is_new_topic = true;
+                }
+            }
+        }
+
+        let sess = ConversationSession {
+            conversation_id: disc.conversation_id.clone(),
+            project_name: disc.project_name.clone(),
+            workspace: disc.workspace.clone(),
+            title: topic_title.clone(),
+            owner_user_id: owner_id,
+            chat_id: owner_id,
+            topic_id: thread_id,
+            harness: disc.harness.clone(),
+            model: "gemini-4-argon".to_string(),
+            thinking_level: "medium".to_string(),
+            permission_mode: "ask".to_string(),
+        };
+
+        {
+            let mut guard = state.0.lock().unwrap();
+            if let Some(tid) = thread_id {
+                guard
+                    .topic_to_conv
+                    .insert((owner_id, tid), disc.conversation_id.clone());
+            }
+            guard
+                .sessions
+                .insert(disc.conversation_id.clone(), sess.clone());
+        }
+
+        if is_new_topic {
+            send_or_edit_topic_config_bar(cfg, owner_id, thread_id, None, &sess, &lang);
+            let status_html = format!(
+                "🗂 <b>Progetto:</b> <code>{}</code>\n🔑 <b>Session ID:</b> <code>{}</code>\n📊 <b>Passaggi registrati:</b> {}\n\n<b>Ultimo Prompt:</b>\n<blockquote>{}</blockquote>\n\n<b>Ultimo Output:</b>\n{}\n\n<blockquote expandable><b>🧠 Ultimo Thinking &amp; Contesto</b>\n{}</blockquote>",
+                escape_html(&disc.project_name),
+                escape_html(&disc.conversation_id[..disc.conversation_id.len().min(8)]),
+                disc.step_count,
+                escape_html(if disc.last_user_prompt.is_empty() { "Sessione attiva" } else { &disc.last_user_prompt }),
+                escape_html(if disc.last_output.is_empty() { "In attesa di istruzioni." } else { &disc.last_output }),
+                escape_html(if disc.last_thinking.is_empty() { "Nessun blocco thinking aggiuntivo." } else { &disc.last_thinking })
+            );
+            let _ = send_telegram_html(&cfg.bot_token, owner_id, thread_id, &status_html, None);
+        }
+
+        synced_count += 1;
+    }
+
+    // Persist updated topic mappings
+    let mut map_entries = Vec::new();
+    for (k, v) in &persisted_map {
+        map_entries.push((k.as_str(), Json::Number(*v as f64)));
+    }
+    let _ = fs::write(&map_path, Json::obj(map_entries).stringify());
+
+    synced_count
 }
 
 fn run_cloud_bridge_polling_loop(cfg: BotConfig, state: SharedBotState) {
@@ -642,11 +785,14 @@ fn handle_incoming_message(cfg: &BotConfig, state: &SharedBotState, msg: &Json) 
             return;
         }
 
+        let _ = sync_local_projects_and_topics(cfg, state);
         send_control_center(cfg, state, chat_id, topic_id, user_id, &lang);
         return;
     }
 
-    if text == "/control" || text == "/projects" || text == "/settings" {
+    if text == "/control" || text == "/projects" || text == "/settings" || text == "/sync" {
+        let _ = sync_local_projects_and_topics(cfg, state);
+        let _ = sync_local_projects_and_topics(cfg, state);
         send_control_center(cfg, state, chat_id, topic_id, user_id, &lang);
         return;
     }

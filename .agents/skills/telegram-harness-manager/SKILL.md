@@ -62,13 +62,20 @@ telegram-harness-manager pair
 Generates a cryptographic `device_token` stored locally in `.thm/device.json` and prints a one-time Telegram deep-link:
 `https://t.me/<YOUR_BOT_USERNAME>?start=pair_<code>`
 
-### 2. Start the Local Daemon & Telegram Bridge
+### 2. Start the Local Daemon & Sync Project Topics (Detached — Zero Hanging Task in Antigravity!)
 ```bash
-telegram-harness-manager serve
+telegram-harness-manager start
 ```
-- In **Cloud Mode (`THM_MODE=cloud`)**: Polls the Telegram Serverless (`tgcloud`) bridge using only the user's `device_token` (the Bot Token never leaves Telegram Serverless).
-- In **Direct Mode (`THM_MODE=direct`)**: Uses `TELEGRAM_BOT_TOKEN` from `.env` (never committed to Git) to serve your configured bot directly.
-- Also serves the local companion API & Mini App preview on port `8430` (`http://127.0.0.1:8430`).
+- **IMPORTANT FOR HARNESS AGENTS**: Always run `telegram-harness-manager start` synchronously (`IsDaemon: false` in `run_command`). It automatically spawns the background daemon as a detached OS process (`CREATE_NO_WINDOW | DETACHED_PROCESS`), syncs all local project conversations into Telegram **Forum Topics**, and exits immediately in `< 1s` without leaving any background task hanging in the Antigravity UI!
+- To re-sync local conversations/projects into Telegram Forum Topics at any time:
+  ```bash
+  telegram-harness-manager sync
+  ```
+- To check daemon status or stop it:
+  ```bash
+  telegram-harness-manager status
+  telegram-harness-manager stop
+  ```
 
 ### 3. Send Final Output to the Conversation's Telegram Topic
 When you complete a task and the user asked to be notified on Telegram (or automatically via the `Stop` hook):

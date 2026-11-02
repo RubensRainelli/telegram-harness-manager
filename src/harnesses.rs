@@ -45,6 +45,20 @@ pub struct TaskCompletionSummary {
     pub git_diff: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct DiscoveredConversation {
+    pub conversation_id: String,
+    pub project_name: String,
+    pub workspace: String,
+    pub title: String,
+    pub harness: String,
+    pub last_user_prompt: String,
+    pub last_output: String,
+    pub last_thinking: String,
+    pub step_count: usize,
+    pub updated_at: u64,
+}
+
 pub fn available_models_for_harness(harness: &str) -> Vec<&'static str> {
     match harness {
         "antigravity" => vec!["gemini-4-argon", "claude-sonnet-4", "claude-opus-4", "gpt-5"],
@@ -58,6 +72,195 @@ pub fn available_models_for_harness(harness: &str) -> Vec<&'static str> {
         "deepseek" => vec!["deepseek-reasoner", "deepseek-chat"],
         "aider" => vec!["sonnet", "deepseek", "o3-mini"],
         _ => vec!["default"],
+    }
+}
+
+/// Scans `~/.gemini/antigravity/brain` for active/recent project conversations (excluding subagents)
+/// so each real conversation on the PC is automatically synced to a Telegram Forum Topic!
+pub fn scan_local_conversations(max_count: usize) -> Vec<DiscoveredConversation> {
+    let brain_dir = get_antigravity_brain_dir();
+    let mut list: Vec<DiscoveredConversation> = Vec::new();
+
+    let read_dir = match fs::read_dir(&brain_dir) {
+        Ok(rd) => rd,
+        Err(_) => return list,
+    };
+
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let conv_id = match path.file_name().and_then(|n| n.to_str()) {
+            Some(s) if s != "tempmediaStorage" && !s.starts_with('.') => s.to_string(),
+            _ => continue,
+        };
+
+        let transcript_path = path
+            .join(".system_generated")
+            .join("logs")
+            .join("transcript.jsonl");
+
+        if !transcript_path.exists() {
+            continue;
+        }
+
+        let updated_at = fs::metadata(&transcript_path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        if let Some(disc) = parse_conversation_transcript(&conv_id, &transcript_path, updated_at) {
+            list.push(disc);
+        }
+    }
+
+    list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    list.truncate(max_count);
+
+    // Also scan sibling project directories in the parent workspace folder (e.g. `Dev/*`)
+    // so every current project on the PC has at least one Forum Topic thread on Telegram!
+    if let Ok(cwd) = env::current_dir() {
+        if let Some(parent_dev) = cwd.parent() {
+            if let Ok(rd) = fs::read_dir(parent_dev) {
+                for entry in rd.flatten() {
+                    let p = entry.path();
+                    if !p.is_dir() {
+                        continue;
+                    }
+                    let pname = match p.file_name().and_then(|n| n.to_str()) {
+                        Some(s) if !s.starts_with('.') => s.to_string(),
+                        _ => continue,
+                    };
+                    let already_present = list
+                        .iter()
+                        .any(|c| c.project_name.eq_ignore_ascii_case(&pname));
+                    if !already_present {
+                        let slug: String = pname
+                            .chars()
+                            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                            .collect();
+                        list.push(DiscoveredConversation {
+                            conversation_id: format!("proj_{}", slug),
+                            project_name: pname.clone(),
+                            workspace: p.display().to_string(),
+                            title: "Main Session".to_string(),
+                            harness: "antigravity".to_string(),
+                            last_user_prompt: format!("Workspace: {}", p.display()),
+                            last_output: "Progetto pronto per ricevere nuovi prompt da Telegram.".to_string(),
+                            last_thinking: "Sincronizzato automaticamente dalla cartella progetti.".to_string(),
+                            step_count: 1,
+                            updated_at: now_secs(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    list
+}
+
+fn parse_conversation_transcript(
+    conv_id: &str,
+    transcript_path: &Path,
+    updated_at: u64,
+) -> Option<DiscoveredConversation> {
+    let content = fs::read_to_string(transcript_path).ok()?;
+    let mut workspace = String::new();
+    let mut first_prompt = String::new();
+    let mut last_user_prompt = String::new();
+    let mut last_output = String::new();
+    let mut last_thinking = String::new();
+    let mut step_count = 0usize;
+
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        step_count += 1;
+
+        if workspace.is_empty() && line.contains("Active Workspaces:") {
+            if let Some(pos) = line.find("Active Workspaces:") {
+                let snippet = &line[pos..];
+                for part in snippet.split("\\n") {
+                    let trimmed = part.trim_start_matches('-').trim();
+                    if trimmed.contains(":\\") || trimmed.starts_with('/') {
+                        workspace = trimmed.to_string();
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(step) = Json::parse_opt(line) {
+            let stype = step.get_str("type").unwrap_or("");
+            if stype == "USER_INPUT" {
+                if let Some(raw_c) = step.get_str("content") {
+                    let clean = clean_user_request_tags(raw_c);
+                    if !clean.is_empty() {
+                        if first_prompt.is_empty() {
+                            first_prompt = clean.lines().next().unwrap_or(&clean).trim().to_string();
+                        }
+                        last_user_prompt = truncate_chars(&clean, 220);
+                    }
+                }
+            } else if stype == "PLANNER_RESPONSE" {
+                if let Some(c) = step.get_str("content") {
+                    if !c.trim().is_empty() {
+                        last_output = truncate_chars(c.trim(), 600);
+                    }
+                }
+                if let Some(th) = step.get_str("thinking") {
+                    if !th.trim().is_empty() {
+                        last_thinking = truncate_chars(th.trim(), 400);
+                    }
+                }
+            }
+        }
+    }
+
+    if step_count == 0 || first_prompt.is_empty() {
+        return None;
+    }
+
+    let project_name = if !workspace.is_empty() {
+        Path::new(&workspace)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Project")
+            .to_string()
+    } else {
+        "Antigravity".to_string()
+    };
+
+    let title = if !first_prompt.is_empty() {
+        truncate_chars(&first_prompt, 48)
+    } else {
+        format!("Session {}", &conv_id[..conv_id.len().min(8)])
+    };
+
+    Some(DiscoveredConversation {
+        conversation_id: conv_id.to_string(),
+        project_name,
+        workspace,
+        title,
+        harness: "antigravity".to_string(),
+        last_user_prompt,
+        last_output,
+        last_thinking,
+        step_count,
+        updated_at,
+    })
+}
+
+fn clean_user_request_tags(raw: &str) -> String {
+    if let (Some(s), Some(e)) = (raw.find("<USER_REQUEST>"), raw.find("</USER_REQUEST>")) {
+        raw[s + 14..e].trim().to_string()
+    } else {
+        raw.trim().to_string()
     }
 }
 
@@ -247,7 +450,6 @@ pub fn extract_completion_summary(conv_id: &str) -> Option<TaskCompletionSummary
         };
         let step_type = step.get_str("type").unwrap_or("");
         if step_type == "USER_INPUT" {
-            // Reset per-turn collectors so we summarize the latest turn
             thinking_chunks.clear();
             steps_list.clear();
         } else if step_type == "PLANNER_RESPONSE" {
