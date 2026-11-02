@@ -10,30 +10,61 @@ description: >-
 
 # Telegram Harness Manager Skill (`telegram-harness-manager`)
 
-Use this skill whenever the user wants to:
-- Connect or pair their machine/project with Telegram (`@Your_Harness_Bot` configured in `.env`);
-- Manage project conversations remotely via Telegram **Forum Topics** (1 Project → Multiple Conversation Topics);
-- Configure **Model**, **Thinking Level** (`none`, `low`, `medium`, `high`, `max`), and **Agent Permissions** (`plan`, `ask`, `auto_edit`, `auto`) before or during prompt execution;
-- Receive **Output-First notifications** when a task finishes (without wasting resources on live thinking spam, while keeping full *Thinking* and *Git Diffs* inspectable on demand);
-- Present **interactive single-select or multi-select choices** (`ask_question` / tool approvals) on Telegram;
-- Invite **collaborators/guests** to a project with granular roles (`viewer` read-only, `proposer` requiring manual Owner approval, or `executor` direct execution), or link a Telegram Forum Group safely.
+## ⚠️ MANDATORY STEP 0: Foreground PEFL v1.0 License Check in the Harness
+
+Under **Clause 3 of the Personal and Educational Free License (PEFL) v1.0**, before executing ANY command of `telegram-harness-manager`, the AI Coding Harness **MUST** verify whether the license has been accepted within the last 7 days by running:
+
+```bash
+telegram-harness-manager pefl-check
+```
+
+If the output indicates `STATUS: PEFL_APPROVAL_REQUIRED` (exit code `42`):
+1. **You MUST display the full PEFL v1.0 License box below directly in the foreground of the Harness chat** so the user can read it clearly:
+   ```text
+   ============================================================
+        Personal and Educational Free License (PEFL) v1.0
+   ============================================================
+   Software: Telegram Harness Manager
+   Copyright (c) 2026 Rubens Rainelli
+   Official Specification: https://github.com/RubensRainelli/pefl-license-spec
+   Author Contact: rubens@rainelli.it | Tel: (+39) 342 811 5882
+
+   TERMINI D'USO / TERMS OF USE:
+   * GRATUITO per uso Personale, Domestico, Didattico ed Educativo
+     (FREE for Personal, Domestic, Educational & Academic use).
+   * SEVERAMENTE VIETATO l'uso Aziendale, Professionale o Commerciale
+     senza autorizzazione scritta e pagamento del corrispettivo all'Autore.
+   * Esclude luoghi di culto e organizzazioni religiose (uso aziendale).
+   ============================================================
+   ```
+2. **You MUST ask the user explicitly** (using `ask_question` or a direct question in chat) to choose one of:
+   - `(Recommended) Accetto la licenza PEFL v1.0 (Ricorda per 7 giorni)`
+   - `Accetto la licenza PEFL v1.0 solo per questa sessione`
+   - `Rifiuto la licenza PEFL v1.0`
+3. **NEVER execute `telegram-harness-manager pefl-accept` without first showing the license in the Harness chat and receiving the user's explicit consent.**
+4. Once the user accepts, run:
+   ```bash
+   telegram-harness-manager pefl-accept --remember-7-days
+   # or, if they chose session-only:
+   telegram-harness-manager pefl-accept --session-only
+   ```
 
 ---
 
 ## 🛠️ CLI & Daemon Commands (`telegram-harness-manager`)
 
-The `telegram-harness-manager` binary (installed in `~/.gemini/antigravity/bin` or workspace `target/release`) provides zero-dependency integration across Windows and Linux:
+After PEFL v1.0 compliance is verified (`STATUS: PEFL_ACCEPTED`), use these commands:
 
 ### 1. Pair This Machine with Telegram (Zero Bot Token Exposure for End Users)
 ```bash
-telegram-harness-manager pair --accept-pefl
+telegram-harness-manager pair
 ```
 Generates a cryptographic `device_token` stored locally in `.thm/device.json` and prints a one-time Telegram deep-link:
 `https://t.me/<YOUR_BOT_USERNAME>?start=pair_<code>`
 
 ### 2. Start the Local Daemon & Telegram Bridge
 ```bash
-telegram-harness-manager serve --accept-pefl
+telegram-harness-manager serve
 ```
 - In **Cloud Mode (`THM_MODE=cloud`)**: Polls the Telegram Serverless (`tgcloud`) bridge using only the user's `device_token` (the Bot Token never leaves Telegram Serverless).
 - In **Direct Mode (`THM_MODE=direct`)**: Uses `TELEGRAM_BOT_TOKEN` from `.env` (never committed to Git) to serve your configured bot directly.

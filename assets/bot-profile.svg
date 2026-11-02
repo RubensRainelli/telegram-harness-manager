@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070812"/>
+      <stop offset="50%" stop-color="#0d1326"/>
+      <stop offset="100%" stop-color="#090a14"/>
+    </linearGradient>
+    <linearGradient id="cyanMagenta" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#ff0055"/>
+    </linearGradient>
+    <linearGradient id="planeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff"/>
+      <stop offset="60%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <filter id="glowCyan" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glowMagenta" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dark Cyberpunk Background -->
+  <rect width="800" height="800" fill="url(#bgGrad)"/>
+
+  <!-- Cyber Grid -->
+  <g stroke="#16203a" stroke-width="2" opacity="0.7">
+    <path d="M0,100 H800 M0,200 H800 M0,300 H800 M0,400 H800 M0,500 H800 M0,600 H800 M0,700 H800"/>
+    <path d="M100,0 V800 M200,0 V800 M300,0 V800 M400,0 V800 M500,0 V800 M600,0 V800 M700,0 V800"/>
+  </g>
+
+  <!-- Outer Glowing Hexagonal / Circular HUD Ring -->
+  <circle cx="400" cy="400" r="340" fill="none" stroke="url(#cyanMagenta)" stroke-width="8" filter="url(#glowCyan)"/>
+  <circle cx="400" cy="400" r="312" fill="none" stroke="#00f0ff" stroke-width="2.5" stroke-dasharray="28 14" opacity="0.75"/>
+
+  <!-- 4 Harness Node Satellites (Antigravity, Claude, OpenCode, DeepSeek) -->
+  <g stroke="#00f0ff" stroke-width="4" opacity="0.85">
+    <line x1="170" y1="210" x2="290" y2="300"/>
+    <line x1="630" y1="210" x2="510" y2="300"/>
+    <line x1="170" y1="590" x2="290" y2="500"/>
+    <line x1="630" y1="590" x2="510" y2="500"/>
+  </g>
+
+  <circle cx="170" cy="210" r="22" fill="#0c1324" stroke="#39ff14" stroke-width="5"/>
+  <circle cx="630" cy="210" r="22" fill="#0c1324" stroke="#00f0ff" stroke-width="5"/>
+  <circle cx="170" cy="590" r="22" fill="#0c1324" stroke="#fefe00" stroke-width="5"/>
+  <circle cx="630" cy="590" r="22" fill="#0c1324" stroke="#ff0055" stroke-width="5"/>
+
+  <!-- Central Terminal Shield -->
+  <polygon points="400,145 615,265 615,515 400,635 185,515 185,265" fill="#0b1120" stroke="#00f0ff" stroke-width="6" filter="url(#glowCyan)"/>
+
+  <!-- Telegram Paper Plane fused with Terminal Prompt `>_` -->
+  <path d="M555,255 L235,382 C214,390 215,408 232,414 L315,440 L504,318 C513,312 521,316 512,325 L358,465 L350,552 C358,552 367,548 375,540 L419,496 L506,560 C523,570 536,564 540,543 L582,282 C586,260 569,248 555,255 Z" fill="url(#planeGrad)" filter="url(#glowCyan)"/>
+
+  <!-- HUD Badge Bottom -->
+  <rect x="230" y="610" width="340" height="58" rx="14" fill="#0c1022" stroke="#ff0055" stroke-width="4" filter="url(#glowMagenta)"/>
+  <text x="400" y="648" fill="#fefe00" font-family="Consolas, 'Share Tech Mono', monospace" font-size="30" font-weight="bold" text-anchor="middle" letter-spacing="3">&gt;_ HARNESS_MGR</text>
+</svg>

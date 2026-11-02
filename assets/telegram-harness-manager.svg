@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250" width="100%" height="100%">
+  <!-- Background -->
+  <rect width="100%" height="100%" fill="#0a0a0f"/>
+
+  <!-- Cyber Grid (50px cells) -->
+  <path d="M 0,50 L 400,50 M 0,100 L 400,100 M 0,150 L 400,150 M 0,200 L 400,200 M 50,0 L 50,250 M 100,0 L 100,250 M 150,0 L 150,250 M 200,0 L 200,250 M 250,0 L 250,250 M 300,0 L 300,250 M 350,0 L 350,250" stroke="#141424" stroke-width="1"/>
+
+  <!-- Glowing Filters -->
+  <defs>
+    <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="glow-magenta" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="glow-yellow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 45-Degree Circuit Board Traces -->
+  <g stroke="#00f0ff" stroke-width="1.5" fill="none" opacity="0.5">
+    <path d="M 164,78 L 194,78 L 208,64 L 244,64" filter="url(#glow-cyan)"/>
+    <circle cx="244" cy="64" r="3" fill="#00f0ff"/>
+    <path d="M 164,170 L 194,170 L 208,184 L 244,184"/>
+    <circle cx="164" cy="170" r="3" fill="#00f0ff"/>
+  </g>
+  <g stroke="#ff0055" stroke-width="1.5" fill="none" opacity="0.65">
+    <path d="M 164,124 L 244,124" stroke-dasharray="6 4" filter="url(#glow-magenta)"/>
+    <circle cx="204" cy="124" r="3.5" fill="#ff0055"/>
+  </g>
+
+  <!-- LEFT NODE: Multi-Harness Workstation (AGY / CLAUDE / OPENCODE / DEEPSEEK) -->
+  <g transform="translate(22, 36)">
+    <polygon points="0,0 134,0 142,8 142,162 8,162 0,154" fill="#0c0c16" stroke="#00f0ff" stroke-width="2" filter="url(#glow-cyan)"/>
+    <line x1="0" y1="22" x2="142" y2="22" stroke="#00f0ff" stroke-width="1.2"/>
+    <circle cx="11" cy="11" r="3.2" fill="#ff0055"/>
+    <circle cx="21" cy="11" r="3.2" fill="#fefe00"/>
+    <circle cx="31" cy="11" r="3.2" fill="#39ff14"/>
+    <text x="88" y="14" fill="#00f0ff" font-family="'Share Tech Mono', monospace" font-size="8" font-weight="bold" text-anchor="middle">MULTI_HARNESS :8430</text>
+
+    <!-- Active Harnesses -->
+    <text x="9" y="37" fill="#39ff14" font-family="'Share Tech Mono', monospace" font-size="7.5" font-weight="bold">&gt; AGY | CLAUDE | OPENCODE</text>
+    <text x="9" y="49" fill="#00f0ff" font-family="'Share Tech Mono', monospace" font-size="7">&gt; DEEPSEEK | AIDER : READY</text>
+
+    <!-- Execution Config Box -->
+    <rect x="8" y="57" width="126" height="42" fill="#121428" stroke="#00f0ff" stroke-width="0.9"/>
+    <text x="13" y="69" fill="#fefe00" font-family="'Share Tech Mono', monospace" font-size="7" font-weight="bold">CFG // TOPIC #01</text>
+    <text x="13" y="80" fill="#ffffff" font-family="'Share Tech Mono', monospace" font-size="6.8">MODEL: GEMINI-4-ARGON</text>
+    <text x="13" y="91" fill="#39ff14" font-family="'Share Tech Mono', monospace" font-size="6.8">THINK: HIGH | PERM: ASK</text>
+
+    <!-- ACL & PEFL Guard Box -->
+    <rect x="8" y="105" width="126" height="34" fill="#181024" stroke="#ff0055" stroke-width="1"/>
+    <text x="13" y="117" fill="#ff0055" font-family="'Share Tech Mono', monospace" font-size="7" font-weight="bold">ACL: OWNER / PROPOSER</text>
+    <text x="13" y="129" fill="#ffffff" font-family="'Share Tech Mono', monospace" font-size="6.6">GROUP_DEFAULT: VIEWER_RO</text>
+
+    <!-- Status Pulse -->
+    <rect x="9" y="145" width="5" height="8" fill="#39ff14">
+      <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+    </rect>
+    <text x="19" y="152" fill="#39ff14" font-family="'Share Tech Mono', monospace" font-size="7">OUTPUT_FIRST_SYNC</text>
+  </g>
+
+  <!-- CENTER: Telegram Serverless Bridge Badge -->
+  <g transform="translate(204, 108)">
+    <polygon points="-28,-14 28,-14 34,-8 34,8 -28,8 -34,2" fill="#0a0a14" stroke="#fefe00" stroke-width="1.2" filter="url(#glow-yellow)"/>
+    <text x="0" y="0" fill="#fefe00" font-family="'Share Tech Mono', monospace" font-size="7.5" font-weight="bold" text-anchor="middle">TG_CLOUD</text>
+  </g>
+
+  <!-- RIGHT NODE: Telegram Bot + Forum Topics + Mini App -->
+  <g transform="translate(246, 26)">
+    <polygon points="8,0 122,0 130,8 130,180 122,188 8,188 0,180 0,8" fill="#0c0c16" stroke="#ff0055" stroke-width="2" filter="url(#glow-magenta)"/>
+    <line x1="48" y1="9" x2="82" y2="9" stroke="#00f0ff" stroke-width="1.5"/>
+    <circle cx="38" cy="9" r="2" fill="#39ff14"/>
+
+    <!-- Telegram Bot Topbar -->
+    <rect x="8" y="18" width="114" height="19" fill="#121226" stroke="#00f0ff" stroke-width="0.8"/>
+    <polygon points="15,28 24,23 22,32 19,29" fill="#00f0ff"/>
+    <text x="70" y="30" fill="#00f0ff" font-family="'Share Tech Mono', monospace" font-size="7.2" font-weight="bold" text-anchor="middle">TG_HARNESS_BOT</text>
+
+    <!-- Forum Topics List (1 Project -> N Topics) -->
+    <rect x="8" y="42" width="114" height="36" fill="#0d1b2a" stroke="#00f0ff" stroke-width="0.9"/>
+    <text x="13" y="53" fill="#fefe00" font-family="'Share Tech Mono', monospace" font-size="6.8" font-weight="bold">FORUM_TOPICS [MULTI]</text>
+    <text x="13" y="64" fill="#39ff14" font-family="'Share Tech Mono', monospace" font-size="6.5"># [thm] Auth Refactor</text>
+    <text x="13" y="73" fill="#00f0ff" font-family="'Share Tech Mono', monospace" font-size="6.5"># [thm] UI MiniApp</text>
+
+    <!-- Interactive Multi-Select / Approval Card -->
+    <rect x="8" y="83" width="114" height="56" fill="#161024" stroke="#ff0055" stroke-width="1"/>
+    <text x="13" y="94" fill="#fefe00" font-family="'Share Tech Mono', monospace" font-size="6.8" font-weight="bold">[?] SELECT_OPTIONS</text>
+    <text x="13" y="105" fill="#ffffff" font-family="'Share Tech Mono', monospace" font-size="6.5">[x] 1. Serverless V8</text>
+    <text x="13" y="114" fill="#00f0ff" font-family="'Share Tech Mono', monospace" font-size="6.5">[ ] 2. Direct Polling</text>
+
+    <rect x="13" y="120" width="50" height="14" fill="#0d2818" stroke="#39ff14" stroke-width="1"/>
+    <text x="38" y="130" fill="#39ff14" font-family="'Share Tech Mono', monospace" font-size="6.6" font-weight="bold" text-anchor="middle">✓ RUN</text>
+    <rect x="67" y="120" width="50" height="14" fill="#121830" stroke="#00f0ff" stroke-width="1"/>
+    <text x="92" y="130" fill="#00f0ff" font-family="'Share Tech Mono', monospace" font-size="6.6" font-weight="bold" text-anchor="middle">DIFF/LOG</text>
+
+    <!-- Expandable Output Block -->
+    <rect x="8" y="145" width="114" height="30" fill="#080812" stroke="#39ff14" stroke-width="0.9"/>
+    <text x="13" y="157" fill="#39ff14" font-family="'Share Tech Mono', monospace" font-size="6.6" font-weight="bold">✓ OUTPUT_READY [4 STEPS]</text>
+    <text x="13" y="168" fill="#00f0ff" font-family="'Share Tech Mono', monospace" font-size="6.3">&gt; TAP_EXPAND_THINKING</text>
+  </g>
+
+  <!-- Bottom HUD Status Label -->
+  <text x="200" y="234" fill="#39ff14" font-family="'Share Tech Mono', monospace" font-size="8.5" text-anchor="middle" letter-spacing="1.2">[MULTI_HARNESS_SKILL // TG_TOPICS_ACL_MINIAPP: ONLINE]</text>
+
+  <!-- HUD Corner Brackets -->
+  <path d="M 10,22 L 10,10 L 22,10" fill="none" stroke="#00f0ff" stroke-width="2"/>
+  <path d="M 390,22 L 390,10 L 378,10" fill="none" stroke="#00f0ff" stroke-width="2"/>
+  <path d="M 10,228 L 10,240 L 22,240" fill="none" stroke="#00f0ff" stroke-width="2"/>
+  <path d="M 390,228 L 390,240 L 378,240" fill="none" stroke="#00f0ff" stroke-width="2"/>
+</svg>

@@ -75,7 +75,40 @@ fn main() {
         return;
     }
 
-    // 3. Foreground Commands: Enforce PEFL v1.0 Clause 3 EULA startup check
+    // 3. Explicit PEFL Check / Acceptance Subcommands for AI Harnesses
+    if subcmd == "pefl-check" {
+        pefl_guard::print_pefl_banner();
+        if pefl_guard::is_pefl_accepted(Path::new(".")) {
+            println!("STATUS: PEFL_ACCEPTED (Valid within 7-day window)");
+            std::process::exit(0);
+        } else {
+            println!("STATUS: PEFL_APPROVAL_REQUIRED");
+            println!("Mostra il testo della licenza PEFL v1.0 qui sopra nella chat dell'Harness e chiedi conferma all'utente prima di eseguire `telegram-harness-manager pefl-accept`.");
+            std::process::exit(42);
+        }
+    }
+
+    if subcmd == "pefl-accept" {
+        let remember = args.iter().any(|a| a == "--remember-7-days");
+        let session_only = args.iter().any(|a| a == "--session-only");
+        if !remember && !session_only {
+            pefl_guard::print_pefl_banner();
+            eprintln!("⚠️ Specificare `--remember-7-days` oppure `--session-only` SOLO dopo aver mostrato la licenza PEFL v1.0 nell'Harness e aver ricevuto il consenso esplicito dell'utente.");
+            std::process::exit(1);
+        }
+        pefl_guard::save_pefl_acceptance(Path::new("."), remember);
+        println!(
+            "✅ Licenza PEFL v1.0 accettata dall'utente ({}).",
+            if remember {
+                "memorizzata per 7 giorni"
+            } else {
+                "valida per la sessione corrente"
+            }
+        );
+        return;
+    }
+
+    // 4. Foreground Commands: Enforce PEFL v1.0 Clause 3 EULA startup check
     pefl_guard::verify_pefl_compliance();
 
     let cfg = load_bot_config();
@@ -455,6 +488,29 @@ fn handle_hook_pre_tool(
     state: &SharedBotState,
     body: &str,
 ) {
+    // Clause 3 PEFL v1.0 Enforcement inside Harness Hook:
+    // If the user has not accepted PEFL v1.0 yet (or 7 days expired), instruct the Harness
+    // to display the full PEFL v1.0 license in the chat and ask the user for approval!
+    if !pefl_guard::is_pefl_accepted(Path::new(".")) {
+        let reason = format!(
+            "{}\n\n⚠️ [PEFL v1.0 APPROVAL REQUIRED IN HARNESS]\n\
+            Prima di procedere, mostra OBBLIGATORIAMENTE il testo della licenza PEFL v1.0 qui sopra nella chat dell'Harness \
+            e chiedi all'utente (con `ask_question`) se accetta i termini e se vuole ricordarla per 7 giorni.\n\
+            Dopo il consenso dell'utente, esegui `telegram-harness-manager pefl-accept --remember-7-days` (o `--session-only`).",
+            pefl_guard::pefl_license_foreground_text()
+        );
+        let out = Json::obj(vec![(
+            "hookSpecificOutput",
+            Json::obj(vec![
+                ("hookEventName", Json::Str("PreToolUse".into())),
+                ("permissionDecision", Json::Str("deny".into())),
+                ("permissionDecisionReason", Json::Str(reason)),
+            ]),
+        )]);
+        send_json(stream, 200, &out);
+        return;
+    }
+
     let parsed = match Json::parse_opt(body) {
         Some(j) => j,
         None => {
