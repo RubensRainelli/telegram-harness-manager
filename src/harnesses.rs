@@ -223,8 +223,11 @@ fn parse_conversation_transcript(
     let mut prompts: Vec<PromptTurn> = Vec::new();
     let mut cur_prompt_text = String::new();
     let mut cur_output_text = String::new();
+    let mut cur_tool_actions: Vec<String> = Vec::new();
     let mut cur_thinking_chunks: Vec<String> = Vec::new();
     let mut cur_tool_count = 0usize;
+    let mut has_pending_running_task = false;
+    let mut last_planner_had_tool_calls = false;
 
     for line in content.lines() {
         if line.trim().is_empty() {
@@ -243,29 +246,29 @@ fn parse_conversation_transcript(
             if stype == "USER_INPUT" {
                 let source = step.get_str("source").unwrap_or("");
                 if let Some(raw_c) = step.get_str("content") {
-                    let is_real_user_prompt = (source == "USER_EXPLICIT"
-                        || raw_c.contains("<USER_REQUEST>"))
-                        && !raw_c.contains("<SYSTEM_MESSAGE>")
-                        && !raw_c.contains("<SUBAGENT_NOTIFICATION>");
+                    if raw_c.contains("<SYSTEM_MESSAGE>") || raw_c.contains("<SUBAGENT_NOTIFICATION>") {
+                        // A background task or subagent just finished: any previous text was an intermediate wait status
+                        has_pending_running_task = false;
+                        cur_output_text.clear();
+                        continue;
+                    }
+
+                    let is_real_user_prompt =
+                        source == "USER_EXPLICIT" || raw_c.contains("<USER_REQUEST>");
 
                     if is_real_user_prompt {
                         let clean = clean_user_request_tags(raw_c);
                         if !clean.is_empty() {
-                            if !cur_prompt_text.is_empty() {
+                            if !cur_prompt_text.is_empty() && !cur_output_text.is_empty() {
                                 let idx = prompts.len() + 1;
                                 prompts.push(PromptTurn {
                                     index: idx,
-                                    user_prompt: truncate_chars(&cur_prompt_text, 500),
-                                    final_output: if cur_output_text.is_empty() {
-                                        "Completato.".to_string()
-                                    } else {
-                                        truncate_chars(&cur_output_text, 950)
-                                    },
-                                    thinking_summary: if cur_thinking_chunks.is_empty() {
-                                        "Esecuzione diretta completata.".to_string()
-                                    } else {
-                                        truncate_chars(&cur_thinking_chunks.join("\n• "), 600)
-                                    },
+                                    user_prompt: truncate_chars(&cur_prompt_text, 600),
+                                    final_output: truncate_chars(&cur_output_text, 2500),
+                                    thinking_summary: build_steps_and_thinking_block(
+                                        &cur_tool_actions,
+                                        &cur_thinking_chunks,
+                                    ),
                                     tool_count: cur_tool_count,
                                 });
                             }
@@ -275,17 +278,40 @@ fn parse_conversation_transcript(
                             }
                             cur_prompt_text = clean.clone();
                             cur_output_text.clear();
+                            cur_tool_actions.clear();
                             cur_thinking_chunks.clear();
                             cur_tool_count = 0;
+                            has_pending_running_task = false;
+                            last_planner_had_tool_calls = false;
                             last_user_prompt = truncate_chars(&clean, 260);
                         }
                     }
                 }
+            } else if stype == "SYSTEM_MESSAGE" {
+                has_pending_running_task = false;
+                cur_output_text.clear();
+            } else if stype == "GENERIC" {
+                if step.get_str("status") == Some("RUNNING") {
+                    has_pending_running_task = true;
+                }
             } else if stype == "PLANNER_RESPONSE" {
+                let tcs = step.get_arr("tool_calls");
+                let has_tools = tcs.map(|a| !a.is_empty()).unwrap_or(false);
+                last_planner_had_tool_calls = has_tools;
+
+                if let Some(arr) = tcs {
+                    cur_tool_count += arr.len();
+                    for tc in arr {
+                        if let Some(act) = format_tool_call_action(tc) {
+                            cur_tool_actions.push(act);
+                        }
+                    }
+                }
+
                 if let Some(c) = step.get_str("content") {
                     if !c.trim().is_empty() {
                         cur_output_text = c.trim().to_string();
-                        last_output = truncate_chars(c.trim(), 600);
+                        last_output = truncate_chars(c.trim(), 1200);
                     }
                 }
                 if let Some(th) = step.get_str("thinking") {
@@ -295,28 +321,25 @@ fn parse_conversation_transcript(
                         last_thinking = truncate_chars(th.trim(), 400);
                     }
                 }
-                if let Some(tcs) = step.get_arr("tool_calls") {
-                    cur_tool_count += tcs.len();
-                }
             }
         }
     }
 
-    if !cur_prompt_text.is_empty() {
+    // Only push the final turn if it has ACTUALLY finished (has final output, no pending tool calls, and no running background task)
+    if !cur_prompt_text.is_empty()
+        && !cur_output_text.is_empty()
+        && !last_planner_had_tool_calls
+        && !has_pending_running_task
+    {
         let idx = prompts.len() + 1;
         prompts.push(PromptTurn {
             index: idx,
-            user_prompt: truncate_chars(&cur_prompt_text, 400),
-            final_output: if cur_output_text.is_empty() {
-                "In elaborazione / pronto.".to_string()
-            } else {
-                truncate_chars(&cur_output_text, 750)
-            },
-            thinking_summary: if cur_thinking_chunks.is_empty() {
-                "Elaborazione contesto in corso.".to_string()
-            } else {
-                truncate_chars(&cur_thinking_chunks.join("\n• "), 550)
-            },
+            user_prompt: truncate_chars(&cur_prompt_text, 600),
+            final_output: truncate_chars(&cur_output_text, 2500),
+            thinking_summary: build_steps_and_thinking_block(
+                &cur_tool_actions,
+                &cur_thinking_chunks,
+            ),
             tool_count: cur_tool_count,
         });
     }
@@ -367,6 +390,67 @@ fn parse_conversation_transcript(
         step_count,
         updated_at,
     })
+}
+
+/// Formats a single `tool_calls` entry into the same human-readable action string shown in Antigravity
+/// (`Ran <toolSummary>`, `Edited <filename>`, `Analyzed <filename>:L<start>-<end>`).
+fn format_tool_call_action(tc: &Json) -> Option<String> {
+    let raw_name = tc.get_str("name").unwrap_or("");
+    let name = raw_name.trim_start_matches("default_api:");
+    let args = tc.get("arguments").or_else(|| tc.get("args"));
+
+    match name {
+        "run_command" => {
+            let summary = args
+                .and_then(|a| a.get_str("toolSummary"))
+                .unwrap_or("command");
+            Some(format!("Ran {}", summary))
+        }
+        "edit_file" | "write_file" => {
+            let path = args.and_then(|a| a.get_str("Path")).unwrap_or("file");
+            let fname = Path::new(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(path);
+            Some(format!("Edited {}", fname))
+        }
+        "read_file" => {
+            let path = args.and_then(|a| a.get_str("Path")).unwrap_or("file");
+            let fname = Path::new(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(path);
+            let s_line = args.and_then(|a| a.get_i64("StartLine"));
+            let e_line = args.and_then(|a| a.get_i64("EndLine"));
+            match (s_line, e_line) {
+                (Some(s), Some(e)) => Some(format!("Analyzed {}:L{}-{}", fname, s, e)),
+                (Some(s), None) => Some(format!("Analyzed {}:L{}", fname, s)),
+                _ => Some(format!("Analyzed {}", fname)),
+            }
+        }
+        "manage_task" => Some("Listed tasks".to_string()),
+        other if !other.is_empty() => Some(format!("Tool: {}", other)),
+        _ => None,
+    }
+}
+
+fn build_steps_and_thinking_block(actions: &[String], thinking_chunks: &[String]) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !actions.is_empty() {
+        let max_actions = 18usize;
+        let start = actions.len().saturating_sub(max_actions);
+        parts.push(actions[start..].join("\n"));
+    }
+    if !thinking_chunks.is_empty() {
+        let max_th = 4usize;
+        let start = thinking_chunks.len().saturating_sub(max_th);
+        parts.push(format!("💭 {}", thinking_chunks[start..].join("\n• ")));
+    }
+    if parts.is_empty() {
+        "Esecuzione diretta completata.".to_string()
+    } else {
+        truncate_chars(&parts.join("\n\n"), 750)
+    }
 }
 
 fn extract_workspace_from_line(line: &str) -> Option<String> {

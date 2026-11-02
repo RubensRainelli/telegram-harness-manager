@@ -352,7 +352,7 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
     let map_path = Path::new(".thm").join("topics_map.json");
     let prompts_path = Path::new(".thm").join("topics_prompts.json");
     let schema_path = Path::new(".thm").join("topics_schema.txt");
-    let current_schema = "v6_real_user_prompts_only";
+    let current_schema = "v7_completed_turns_and_tool_steps";
 
     let mut persisted_map: BTreeMap<String, i64> = BTreeMap::new();
     if let Ok(raw) = fs::read_to_string(&map_path) {
