@@ -1693,7 +1693,14 @@ pub fn telegram_api_call(bot_token: &str, method: &str, payload: &Json) -> Resul
     }
     let url = format!("https://api.telegram.org/bot{}/{}", bot_token, method);
     let raw = https_post_json(&url, payload, None)?;
-    Json::parse(&raw)
+    let parsed = Json::parse(&raw)?;
+    if parsed.get_bool("ok") != Some(true) {
+        let desc = parsed
+            .get_str("description")
+            .unwrap_or("Unknown Telegram API error");
+        return Err(format!("Telegram API error ({}): {}", method, desc));
+    }
+    Ok(parsed)
 }
 
 pub fn https_post_json(
@@ -1701,6 +1708,9 @@ pub fn https_post_json(
     payload: &Json,
     bearer_token: Option<&str>,
 ) -> Result<String, String> {
+    use std::io::Write;
+    use std::process::Stdio;
+
     let body = payload.stringify();
     let curl_bin = if cfg!(target_os = "windows") {
         "curl.exe"
@@ -1720,9 +1730,16 @@ pub fn https_post_json(
     if let Some(tok) = bearer_token {
         cmd.arg("-H").arg(format!("Authorization: Bearer {}", tok));
     }
-    cmd.arg("--data-raw").arg(&body);
+    cmd.arg("--data-binary").arg("@-");
+    cmd.stdin(Stdio::piped());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
 
-    let out = cmd.output().map_err(|e| e.to_string())?;
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(body.as_bytes());
+    }
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
     if !out.status.success() {
         return Err("HTTPS request failed".into());
     }
