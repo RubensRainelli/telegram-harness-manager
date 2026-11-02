@@ -6,7 +6,7 @@
   Personal and educational free use permitted.
   Corporate, business or enterprise use prohibited without written authorization and fee.
 -->
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -60,7 +60,7 @@
       color: var(--text); padding: 5px 10px; border-radius: 999px;
       font-size: 0.75rem; cursor: pointer;
     }
-    main { max-width: 820px; margin: 0 auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+    main { max-width: 820px; margin: 0 auto; padding: 14px; display: none; flex-direction: column; gap: 14px; }
     .tabs {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
       background: var(--card); padding: 5px; border-radius: 12px; border: 1px solid var(--border);
@@ -108,11 +108,15 @@
       padding: 12px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
       font-size: 0.78rem; white-space: pre-wrap; color: #cbd5e1; max-height: 340px;
     }
-    .diff-add { color: #4ade80; }
-    .diff-del { color: #f87171; }
     .role-row {
       display: flex; justify-content: space-between; align-items: center;
       padding: 9px 0; border-bottom: 1px solid var(--border);
+    }
+    /* Strict Telegram Authentication Gate */
+    #auth-gate {
+      max-width: 520px; margin: 48px auto; padding: 22px;
+      background: var(--card); border: 1px solid var(--danger);
+      border-radius: 16px; text-align: center;
     }
     /* PEFL v1.0 Foreground Modal */
     #pefl-modal {
@@ -146,21 +150,34 @@
       <div class="brand-badge">THM</div>
       <div>
         <h1>Telegram Harness Manager</h1>
-        <p id="sub-status">Multi-Harness · Multi-Topic · Collaborative ACL</p>
+        <p id="sub-status">Zero-Trust Telegram ID Auth · Multi-Harness</p>
       </div>
     </div>
-    <button class="lang-pill" id="lang-btn" onclick="toggleLang()">🌐 EN / IT</button>
+    <button class="lang-pill" id="lang-btn" onclick="toggleLang()">🌐 IT / EN</button>
   </header>
 
-  <main>
+  <!-- STRICT TELEGRAM ID AUTHENTICATION GATE (Shown when opened outside Telegram or without matching Owner/Guest ID) -->
+  <section id="auth-gate">
+    <div style="font-size:2.2rem;margin-bottom:10px;">🔒</div>
+    <h2 style="font-size:1.08rem;margin-bottom:8px;" id="gate-title">Accesso Riservato — Verifica ID Telegram Richiesta</h2>
+    <p style="font-size:0.84rem;color:var(--muted);margin-bottom:14px;" id="gate-desc">
+      Questa Mini App non espone alcun dato pubblicamente. Per visualizzare i tuoi progetti e lo storico dei thread (inclusi gli archiviati), devi aprirla <strong>esclusivamente dall'interno di Telegram</strong> con un account il cui <code>user.id</code> corrisponda all'Owner o a un Collaboratore autorizzato dell'Harness.
+    </p>
+    <div style="background:#090d16;border:1px solid var(--border);border-radius:10px;padding:10px;font-size:0.78rem;color:var(--muted);text-align:left;" id="gate-diag">
+      Stato autenticazione: <code>In verifica...</code>
+    </div>
+  </section>
+
+  <!-- AUTHENTICATED APPLICATION VIEW (Hidden by default until Telegram User ID is verified) -->
+  <main id="app-main">
     <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('topics')" id="tab-topics">💬 Topics</button>
+      <button class="tab-btn active" onclick="switchTab('topics')" id="tab-topics">💬 Thread</button>
       <button class="tab-btn" onclick="switchTab('launch')" id="tab-launch">🚀 Prompt</button>
       <button class="tab-btn" onclick="switchTab('inspect')" id="tab-inspect">🧠 Thinking & Diff</button>
-      <button class="tab-btn" onclick="switchTab('guests')" id="tab-guests">👥 Guests & Group</button>
+      <button class="tab-btn" onclick="switchTab('guests')" id="tab-guests">👥 Invitati & Gruppi</button>
     </div>
 
-    <!-- TAB 1: PROJECTS & MULTI-CONVERSATION TOPICS -->
+    <!-- TAB 1: ACTIVE & ARCHIVED HARNESS THREADS -->
     <section id="view-topics" class="card">
       <div class="card-title">
         <span id="lbl-projects-title">🗂 Thread Harness Attivi (Ordinati per Utilizzo)</span>
@@ -174,7 +191,7 @@
           <button class="btn-outline" onclick="toggleArchivedList()" id="btn-toggle-archived">Mostra / Nascondi</button>
         </div>
         <p style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;" id="lbl-archived-desc">
-          I thread archiviati nell'harness non appaiono nella lista topic di Telegram per mantenere la vista pulita, ma puoi aprirli e ispezionarli in qualsiasi momento da qui.
+          I thread archiviati nell'harness non appaiono nella lista topic di Telegram per mantenere la vista pulita, ma puoi aprirli e consultarli da qui.
         </p>
         <div id="archived-conversations-list" style="display:block;"></div>
       </div>
@@ -183,7 +200,7 @@
     <!-- TAB 2: LAUNCH PROMPT WITH MODEL / THINKING / PERMISSIONS -->
     <section id="view-launch" class="card" style="display:none;">
       <div class="card-title">
-        <span id="lbl-launch-title">⚙️ Execution Controls & Prompt Launcher</span>
+        <span id="lbl-launch-title">⚙️ Controlli Esecuzione & Lancio Prompt</span>
       </div>
       <div class="grid-2" style="margin-bottom:10px;">
         <div>
@@ -197,7 +214,7 @@
           </select>
         </div>
         <div>
-          <label id="lbl-model">🤖 Model</label>
+          <label id="lbl-model">🤖 Modello</label>
           <select id="sel-model"></select>
         </div>
       </div>
@@ -213,7 +230,7 @@
           </select>
         </div>
         <div>
-          <label id="lbl-perms">🛡️ Agent Permissions</label>
+          <label id="lbl-perms">🛡️ Permessi Agente</label>
           <select id="sel-perms">
             <option value="plan">📋 Plan (Read-Only)</option>
             <option value="ask" selected>🙋 Supervised (Ask on Telegram)</option>
@@ -223,49 +240,49 @@
         </div>
       </div>
       <div style="margin-bottom:10px;">
-        <label id="lbl-prompt-box">💬 Prompt (Delivered when finished — zero live spam)</label>
-        <textarea id="inp-prompt" placeholder="Describe the task for the selected project/conversation topic..."></textarea>
+        <label id="lbl-prompt-box">💬 Prompt</label>
+        <textarea id="inp-prompt" placeholder="Scrivi il prompt per il thread selezionato..."></textarea>
       </div>
-      <button class="btn" style="width:100%;" onclick="dispatchPrompt()" id="btn-send-prompt">⚡ Dispatch Prompt to Harness</button>
+      <button class="btn" style="width:100%;" onclick="dispatchPrompt()" id="btn-send-prompt">⚡ Invia Prompt all'Harness</button>
     </section>
 
     <!-- TAB 3: ON-DEMAND THINKING, STEPS & GIT DIFF -->
     <section id="view-inspect" class="card" style="display:none;">
       <div class="card-title">
-        <span id="lbl-inspect-title">🧠 On-Demand Thinking & Steps</span>
+        <span id="lbl-inspect-title">🧠 Thinking & Storico Prompt del Thread</span>
         <span class="badge">Output-First Mode</span>
       </div>
-      <pre class="thinking-box" id="thinking-viewer">Select a conversation topic to inspect its reasoning chain, tool calls, and previous steps on demand.</pre>
+      <pre class="thinking-box" id="thinking-viewer">Seleziona un thread per visualizzare i suoi prompt, ragionamenti e passaggi.</pre>
       <div class="card-title" style="margin-top:14px;">
         <span id="lbl-diff-title">🔍 Git Diff Inspector</span>
       </div>
-      <pre class="diff-box" id="diff-viewer">+ Ready to inspect modified files and diffs before committing.</pre>
+      <pre class="diff-box" id="diff-viewer">+ Nessun diff non committato registrato per questo passaggio.</pre>
     </section>
 
     <!-- TAB 4: COLLABORATORS / GUESTS & GROUP FORUM SECURITY -->
     <section id="view-guests" class="card" style="display:none;">
       <div class="card-title">
-        <span id="lbl-guests-title">👥 Project Collaborators & Group Security</span>
+        <span id="lbl-guests-title">👥 Collaboratori Progetto & Sicurezza Gruppi</span>
         <span class="badge">Owner ACL</span>
       </div>
       <p style="font-size:0.79rem;color:var(--muted);margin-bottom:12px;" id="lbl-guests-desc">
-        Invite collaborators to your Harness projects with granular permissions. In Telegram Groups, only the verified Harness Owner can link the bot, Forum Topics & Manage Topics permissions are verified, and the default member role is locked to <strong>Viewer (Read-Only)</strong>.
+        Autorizza collaboratori sui tuoi progetti con permessi granulari (Viewer, Proposer con approvazione Owner, Executor).
       </p>
       <div class="grid-2" style="margin-bottom:10px;">
         <div>
-          <label>@Username or Telegram ID</label>
+          <label>@Username o Telegram ID</label>
           <input type="text" id="inp-guest-user" placeholder="@collaborator" />
         </div>
         <div>
-          <label id="lbl-guest-role">Permission Role</label>
+          <label id="lbl-guest-role">Ruolo Permessi</label>
           <select id="sel-guest-role">
-            <option value="viewer">👁️ Viewer (Read-Only)</option>
-            <option value="proposer">✋ Proposer (Manual Owner Approval)</option>
-            <option value="executor">🚀 Executor (Direct Execution)</option>
+            <option value="viewer">👁️ Viewer (Sola Lettura)</option>
+            <option value="proposer">✋ Proposer (Approvazione Manuale Owner)</option>
+            <option value="executor">🚀 Executor (Esecuzione Diretta)</option>
           </select>
         </div>
       </div>
-      <button class="btn" style="width:100%;margin-bottom:14px;" onclick="addCollaborator()" id="btn-add-guest">🔗 Authorize Collaborator / Generate Invite</button>
+      <button class="btn" style="width:100%;margin-bottom:14px;" onclick="addCollaborator()" id="btn-add-guest">🔗 Autorizza Collaboratore</button>
       <div id="guest-list"></div>
     </section>
   </main>
@@ -279,37 +296,27 @@
       'aider': ['sonnet', 'deepseek', 'o3-mini']
     };
 
-    const I18N = {
-      en: {
-        topics: '💬 Topics',
-        launch: '🚀 Prompt',
-        inspect: '🧠 Thinking & Diff',
-        guests: '👥 Guests & Group',
-        projectsTitle: '🗂 Projects & Active Conversation Topics',
-        launchTitle: '⚙️ Execution Controls & Prompt Launcher',
-        inspectTitle: '🧠 On-Demand Thinking & Steps',
-        guestsTitle: '👥 Project Collaborators & Group Security',
-        sendBtn: '⚡ Dispatch Prompt to Harness'
-      },
-      it: {
-        topics: '💬 Topic',
-        launch: '🚀 Prompt',
-        inspect: '🧠 Thinking & Diff',
-        guests: '👥 Invitati & Gruppi',
-        projectsTitle: '🗂 Progetti & Topic Conversazioni Attive',
-        launchTitle: '⚙️ Controlli Esecuzione & Lancio Prompt',
-        inspectTitle: '🧠 Thinking & Passaggi On-Demand',
-        guestsTitle: '👥 Collaboratori Progetto & Sicurezza Gruppi',
-        sendBtn: '⚡ Invia Prompt all\'Harness'
-      }
-    };
-
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
 
-    let currentLang = (tg?.initDataUnsafe?.user?.language_code || navigator.language || 'en').toLowerCase().startsWith('it') ? 'it' : 'en';
-    let selectedConversationId = 'default';
+    const telegramInitData = tg?.initData || '';
+    const telegramUser = tg?.initDataUnsafe?.user || null;
+    const telegramUserId = telegramUser?.id ? String(telegramUser.id) : '';
+
+    let currentLang = (telegramUser?.language_code || navigator.language || 'it').toLowerCase().startsWith('en') ? 'en' : 'it';
+    let selectedConversationId = '';
     let dashboardState = { conversations: [], collaborators: [] };
+
+    function getApiBaseUrl() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('api')) {
+        localStorage.setItem('thm_api_base', params.get('api'));
+      }
+      if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
+        return '';
+      }
+      return localStorage.getItem('thm_api_base') || 'http://127.0.0.1:8430';
+    }
 
     function checkPefl() {
       const key = 'pefl_accepted_TelegramHarnessManager';
@@ -325,23 +332,9 @@
       document.getElementById('pefl-modal').style.display = 'none';
     }
 
-    function applyLocale() {
-      const d = I18N[currentLang] || I18N.en;
-      document.getElementById('tab-topics').textContent = d.topics;
-      document.getElementById('tab-launch').textContent = d.launch;
-      document.getElementById('tab-inspect').textContent = d.inspect;
-      document.getElementById('tab-guests').textContent = d.guests;
-      document.getElementById('lbl-projects-title').textContent = d.projectsTitle;
-      document.getElementById('lbl-launch-title').textContent = d.launchTitle;
-      document.getElementById('lbl-inspect-title').textContent = d.inspectTitle;
-      document.getElementById('lbl-guests-title').textContent = d.guestsTitle;
-      document.getElementById('btn-send-prompt').textContent = d.sendBtn;
-      document.getElementById('lang-btn').textContent = `🌐 ${currentLang.toUpperCase()}`;
-    }
-
     function toggleLang() {
       currentLang = currentLang === 'it' ? 'en' : 'it';
-      applyLocale();
+      document.getElementById('lang-btn').textContent = `🌐 ${currentLang.toUpperCase()}`;
     }
 
     function switchTab(name) {
@@ -358,28 +351,6 @@
       sel.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
     }
 
-    async function callBackend(action, payload = {}) {
-      if (tg?.Serverless?.call) {
-        try {
-          return await tg.Serverless.call('webapp', { action, ...payload });
-        } catch (_) {}
-      }
-      try {
-        const res = await fetch('/api/state');
-        if (res.ok) return await res.json();
-      } catch (_) {}
-      return null;
-    }
-
-    async function loadDashboard() {
-      const data = await callBackend('dashboard');
-      if (data && Array.isArray(data.conversations)) {
-        dashboardState = data;
-      }
-      renderConversations();
-      renderGuests();
-    }
-
     function rankToEmoji(rank) {
       const map = ['0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
       if (rank >= 1 && rank <= 10) return map[rank];
@@ -391,131 +362,81 @@
       el.style.display = el.style.display === 'none' ? 'block' : 'none';
     }
 
+    async function callBackend(action, payload = {}) {
+      // 1. Strict Client-Side Gate: Never allow requests without a valid Telegram WebApp User ID
+      if (!telegramUserId || !telegramInitData) {
+        return { ok: false, error: 'NO_TELEGRAM_INIT_DATA' };
+      }
+
+      if (tg?.Serverless?.call) {
+        try {
+          const res = await tg.Serverless.call('webapp', { action, ...payload });
+          if (res && res.ok) return res;
+        } catch (_) {}
+      }
+
+      const base = getApiBaseUrl();
+      try {
+        const res = await fetch(`${base}/api/state`, {
+          headers: {
+            'X-Telegram-Init-Data': telegramInitData,
+            'X-Telegram-User-Id': telegramUserId
+          }
+        });
+        if (res.status === 403 || res.status === 401) {
+          return { ok: false, error: 'UNAUTHORIZED_TELEGRAM_ID' };
+        }
+        if (res.ok) return await res.json();
+      } catch (_) {
+        return { ok: false, error: 'DAEMON_UNREACHABLE' };
+      }
+      return { ok: false, error: 'UNKNOWN' };
+    }
+
+    async function initAuthenticatedApp() {
+      const gate = document.getElementById('auth-gate');
+      const diag = document.getElementById('gate-diag');
+      const appMain = document.getElementById('app-main');
+
+      // Block immediately if opened in browser / incognito outside Telegram
+      if (!telegramUserId || !telegramInitData) {
+        gate.style.display = 'block';
+        appMain.style.display = 'none';
+        diag.innerHTML = `⛔ <strong>Accesso bloccato:</strong> Nessun <code>Telegram.WebApp.initData</code> rilevato.<br/>Apri questa Mini App esclusivamente dal pulsante dentro la chat di Telegram con il tuo bot.`;
+        return;
+      }
+
+      checkPefl();
+      const data = await callBackend('dashboard');
+
+      if (!data || !data.ok) {
+        gate.style.display = 'block';
+        appMain.style.display = 'none';
+        if (data?.error === 'UNAUTHORIZED_TELEGRAM_ID') {
+          diag.innerHTML = `⛔ <strong>ID Telegram Non Autorizzato (<code>${telegramUserId}</code>):</strong> Il tuo account Telegram non corrisponde all'Owner né agli invitati autorizzati su questo Harness.`;
+        } else {
+          diag.innerHTML = `🔐 <strong>Identità Telegram rilevata (ID: <code>${telegramUserId}</code>)</strong>, ma il demone locale (<code>127.0.0.1:8430</code>) non è raggiungibile da questo dispositivo o rete.`;
+        }
+        return;
+      }
+
+      // Authenticated! Unlock UI and render strictly the verified user's conversations
+      gate.style.display = 'none';
+      appMain.style.display = 'flex';
+      dashboardState = data;
+      renderConversations();
+      renderGuests();
+    }
+
     function renderConversations() {
       const container = document.getElementById('conversations-list');
       const archivedContainer = document.getElementById('archived-conversations-list');
-      const defaultConvs = [
-        {
-          id: '53044e90-cb45-438f-a43e-eb0363c7ddad',
-          rank: 1,
-          archived: false,
-          projectName: 'telegram-harness-manager',
-          title: 'Telegram Harness Manager Skill Creation',
-          harness: 'antigravity',
-          model: 'gemini-4-argon',
-          thinking_level: 'medium',
-          permission_mode: 'ask',
-          status: 'ACTIVE',
-          stepCount: 85,
-          lastThinking: 'Thread #1 — Configurazione primo messaggio fissato (Nome Progetto, Nome Thread, Modello, Thinking, Permessi) + singoli prompt fissati nel thread.'
-        },
-        {
-          id: '5d229a2d-8222-4a2a-beb9-cbfdb3426fff',
-          rank: 2,
-          archived: false,
-          projectName: 'SmartCam',
-          title: 'Gestione PR Versione 2.1.1',
-          harness: 'antigravity',
-          model: 'gemini-4-argon',
-          thinking_level: 'medium',
-          permission_mode: 'ask',
-          status: 'ACTIVE',
-          stepCount: 28,
-          lastThinking: 'Thread #2 — Gestione PR e rilascio Versione 2.1.1 su SmartCam.'
-        },
-        {
-          id: 'a1bb0782-93a1-47c5-911b-0c9c05d45aeb',
-          rank: 3,
-          archived: false,
-          projectName: 'SmartCam',
-          title: 'Ottimizzazione Performance App Multiagente',
-          harness: 'antigravity',
-          model: 'gemini-4-argon',
-          thinking_level: 'medium',
-          permission_mode: 'ask',
-          status: 'ACTIVE',
-          stepCount: 42,
-          lastThinking: 'Thread #3 — Ottimizzazione pipeline multiagente e riduzione latenza.'
-        },
-        {
-          id: 'b749dadb-4075-43ea-aa10-d4e146be7a14',
-          rank: 4,
-          archived: false,
-          projectName: 'extended-markdown-editor',
-          title: 'Telegram Markdown Editor SPA',
-          harness: 'antigravity',
-          model: 'gemini-4-argon',
-          thinking_level: 'medium',
-          permission_mode: 'ask',
-          status: 'ACTIVE',
-          stepCount: 38,
-          lastThinking: 'Thread #4 — Editor Markdown SPA integrato con Telegram.'
-        },
-        {
-          id: 'b1ea1620-17d2-474e-bf48-b66bb177bbc8',
-          rank: 5,
-          archived: false,
-          projectName: 'Antigravity',
-          title: 'Android App For Google Antigravity',
-          harness: 'antigravity',
-          model: 'gemini-4-argon',
-          thinking_level: 'medium',
-          permission_mode: 'ask',
-          status: 'ACTIVE',
-          stepCount: 31,
-          lastThinking: 'Thread #5 — Client Android per Google Antigravity.'
-        },
-        {
-          id: '4e095458-de47-4810-91db-889c8021704f',
-          rank: 0,
-          archived: true,
-          projectName: 'SmartCam',
-          title: 'SmartCam Windows Virtual Camera Architecture',
-          harness: 'antigravity',
-          model: 'gemini-4-argon',
-          thinking_level: 'medium',
-          permission_mode: 'ask',
-          status: 'ARCHIVED',
-          stepCount: 64,
-          lastThinking: 'Thread Archiviato — Architettura Virtual Camera DirectShow/MediaFoundation su Windows.'
-        },
-        {
-          id: '7bf59f1f-b307-48bc-b8de-c1a2e4aa1847',
-          rank: 0,
-          archived: true,
-          projectName: 'SmartCam',
-          title: 'SmartCam App Debugging and Refinement',
-          harness: 'antigravity',
-          model: 'gemini-4-argon',
-          thinking_level: 'medium',
-          permission_mode: 'ask',
-          status: 'ARCHIVED',
-          stepCount: 51,
-          lastThinking: 'Thread Archiviato — Debugging frame pipeline e raffinamento UI SmartCam.'
-        },
-        {
-          id: '2408c116-be1c-424c-bb8a-6bd3877b7e34',
-          rank: 0,
-          archived: true,
-          projectName: 'PEFL-License',
-          title: 'Creating Custom Software License',
-          harness: 'antigravity',
-          model: 'gemini-4-argon',
-          thinking_level: 'medium',
-          permission_mode: 'ask',
-          status: 'ARCHIVED',
-          stepCount: 29,
-          lastThinking: 'Thread Archiviato — Redazione licenza PEFL v1.0 (Personal and Educational Free License).'
-        }
-      ];
-
-      const allConvs = dashboardState.conversations?.length ? dashboardState.conversations : defaultConvs;
-      dashboardState.conversations = allConvs;
+      const allConvs = Array.isArray(dashboardState.conversations) ? dashboardState.conversations : [];
 
       const activeConvs = allConvs.filter(c => !c.archived);
       const archivedConvs = allConvs.filter(c => c.archived);
 
-      container.innerHTML = activeConvs.map((c, idx) => {
+      container.innerHTML = activeConvs.length ? activeConvs.map((c, idx) => {
         const emoji = rankToEmoji(c.rank || (idx + 1));
         return `
         <div class="topic-item" onclick="selectConversation('${c.id || c.conversation_id}')">
@@ -527,7 +448,7 @@
             🗂 Progetto: <code>${c.projectName || 'Project'}</code> · 🤖 ${c.model || 'gemini-4-argon'} · 🧠 ${c.thinking_level || 'medium'} · 🛡️ ${c.permission_mode || 'ask'}
           </div>
         </div>
-      `}).join('');
+      `}).join('') : '<p style="font-size:0.78rem;color:var(--muted);">Nessun thread attivo.</p>';
 
       if (archivedContainer) {
         archivedContainer.innerHTML = archivedConvs.length ? archivedConvs.map(c => `
@@ -549,48 +470,52 @@
       const c = (dashboardState.conversations || []).find(x => (x.id || x.conversation_id) === id);
       if (c) {
         document.getElementById('thinking-viewer').textContent =
-          c.lastThinking || c.last_thinking || `Session ${id} (${c.projectName || ''}) — ${c.stepCount || 0} steps recorded.`;
+          c.lastThinking || c.last_thinking || `Thread ${c.title} (${c.projectName || ''}) — ${c.stepCount || 0} passaggi registrati.`;
         document.getElementById('diff-viewer').textContent =
-          c.lastDiff || c.last_diff || 'No uncommitted diff blocks recorded for this step.';
+          c.lastDiff || c.last_diff || 'Nessun blocco diff non committato.';
       }
       switchTab('inspect');
     }
 
     function renderGuests() {
       const list = document.getElementById('guest-list');
-      const guests = dashboardState.collaborators?.length ? dashboardState.collaborators : [
-        { username: '@group_default', role: 'viewer (Read-Only Default)' }
-      ];
-      list.innerHTML = guests.map(g => `
+      const guests = Array.isArray(dashboardState.collaborators) && dashboardState.collaborators.length
+        ? dashboardState.collaborators
+        : [];
+      list.innerHTML = guests.length ? guests.map(g => `
         <div class="role-row">
           <span>👤 <strong>${g.username || g.user_id}</strong></span>
           <span class="badge">${g.role}</span>
         </div>
-      `).join('');
+      `).join('') : '<p style="font-size:0.78rem;color:var(--muted);">Solo Owner autorizzato (nessun ospite esterno attivo).</p>';
     }
 
     async function dispatchPrompt() {
+      if (!telegramUserId || !telegramInitData) return;
       const prompt = document.getElementById('inp-prompt').value.trim();
       if (!prompt) return;
       const payload = {
-        conversationId: selectedConversationId,
+        conversationId: selectedConversationId || 'default',
         prompt,
         harness: document.getElementById('sel-harness').value,
         model: document.getElementById('sel-model').value,
         thinkingLevel: document.getElementById('sel-thinking').value,
         permissionMode: document.getElementById('sel-perms').value
       };
+      const base = getApiBaseUrl();
       try {
-        await fetch('/api/prompt', {
+        await fetch(`${base}/api/prompt`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-Init-Data': telegramInitData,
+            'X-Telegram-User-Id': telegramUserId
+          },
           body: JSON.stringify(payload)
         });
       } catch (_) {}
       document.getElementById('inp-prompt').value = '';
-      alert(currentLang === 'it'
-        ? '⚡ Prompt inviato! Riceverai l\'output su Telegram appena l\'harness avrà concluso.'
-        : '⚡ Prompt dispatched! You will receive the final output on Telegram when finished.');
+      alert('⚡ Prompt inviato! Riceverai l\'output su Telegram appena l\'harness avrà concluso.');
     }
 
     function addCollaborator() {
@@ -603,10 +528,8 @@
       renderGuests();
     }
 
-    checkPefl();
-    applyLocale();
     updateModelList();
-    loadDashboard();
+    initAuthenticatedApp();
   </script>
 </body>
 </html>

@@ -206,7 +206,13 @@ fn parse_conversation_transcript(
     transcript_path: &Path,
     updated_at: u64,
 ) -> Option<DiscoveredConversation> {
-    let content = fs::read_to_string(transcript_path).ok()?;
+    let full_candidate = transcript_path.with_file_name("transcript_full.jsonl");
+    let effective_path = if full_candidate.exists() {
+        full_candidate.as_path()
+    } else {
+        transcript_path
+    };
+    let content = fs::read_to_string(effective_path).ok()?;
     let mut workspace = String::new();
     let mut first_prompt = String::new();
     let mut last_user_prompt = String::new();
@@ -235,36 +241,44 @@ fn parse_conversation_transcript(
         if let Some(step) = Json::parse_opt(line) {
             let stype = step.get_str("type").unwrap_or("");
             if stype == "USER_INPUT" {
+                let source = step.get_str("source").unwrap_or("");
                 if let Some(raw_c) = step.get_str("content") {
-                    let clean = clean_user_request_tags(raw_c);
-                    // Ignore internal subagent wakeup notifications so only real user prompts become Pinned Turns
-                    if !clean.is_empty() && !raw_c.contains("<SUBAGENT_NOTIFICATION>") {
-                        if !cur_prompt_text.is_empty() {
-                            let idx = prompts.len() + 1;
-                            prompts.push(PromptTurn {
-                                index: idx,
-                                user_prompt: truncate_chars(&cur_prompt_text, 400),
-                                final_output: if cur_output_text.is_empty() {
-                                    "Completato.".to_string()
-                                } else {
-                                    truncate_chars(&cur_output_text, 750)
-                                },
-                                thinking_summary: if cur_thinking_chunks.is_empty() {
-                                    "Esecuzione diretta completata.".to_string()
-                                } else {
-                                    truncate_chars(&cur_thinking_chunks.join("\n• "), 550)
-                                },
-                                tool_count: cur_tool_count,
-                            });
+                    let is_real_user_prompt = (source == "USER_EXPLICIT"
+                        || raw_c.contains("<USER_REQUEST>"))
+                        && !raw_c.contains("<SYSTEM_MESSAGE>")
+                        && !raw_c.contains("<SUBAGENT_NOTIFICATION>");
+
+                    if is_real_user_prompt {
+                        let clean = clean_user_request_tags(raw_c);
+                        if !clean.is_empty() {
+                            if !cur_prompt_text.is_empty() {
+                                let idx = prompts.len() + 1;
+                                prompts.push(PromptTurn {
+                                    index: idx,
+                                    user_prompt: truncate_chars(&cur_prompt_text, 500),
+                                    final_output: if cur_output_text.is_empty() {
+                                        "Completato.".to_string()
+                                    } else {
+                                        truncate_chars(&cur_output_text, 950)
+                                    },
+                                    thinking_summary: if cur_thinking_chunks.is_empty() {
+                                        "Esecuzione diretta completata.".to_string()
+                                    } else {
+                                        truncate_chars(&cur_thinking_chunks.join("\n• "), 600)
+                                    },
+                                    tool_count: cur_tool_count,
+                                });
+                            }
+                            if first_prompt.is_empty() {
+                                first_prompt =
+                                    clean.lines().next().unwrap_or(&clean).trim().to_string();
+                            }
+                            cur_prompt_text = clean.clone();
+                            cur_output_text.clear();
+                            cur_thinking_chunks.clear();
+                            cur_tool_count = 0;
+                            last_user_prompt = truncate_chars(&clean, 260);
                         }
-                        if first_prompt.is_empty() {
-                            first_prompt = clean.lines().next().unwrap_or(&clean).trim().to_string();
-                        }
-                        cur_prompt_text = clean.clone();
-                        cur_output_text.clear();
-                        cur_thinking_chunks.clear();
-                        cur_tool_count = 0;
-                        last_user_prompt = truncate_chars(&clean, 260);
                     }
                 }
             } else if stype == "PLANNER_RESPONSE" {

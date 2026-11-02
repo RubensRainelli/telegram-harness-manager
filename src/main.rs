@@ -403,7 +403,7 @@ fn run_daemon_server(cfg: BotConfig, state: SharedBotState) {
 
     spawn_telegram_worker(cfg.clone(), Arc::clone(&state));
 
-    let bind_addr = format!("0.0.0.0:{}", DEFAULT_PORT);
+    let bind_addr = format!("127.0.0.1:{}", DEFAULT_PORT);
     let listener = TcpListener::bind(&bind_addr).unwrap_or_else(|e| {
         eprintln!("❌ Cannot bind {}: {}", bind_addr, e);
         std::process::exit(1);
@@ -437,20 +437,32 @@ fn handle_http_client(mut stream: TcpStream, cfg: BotConfig, state: SharedBotSta
     let path = parts[1].split('?').next().unwrap_or("/");
 
     let mut content_length = 0usize;
+    let mut tg_user_id_header: Option<i64> = None;
+    let mut tg_init_data_header = String::new();
+
     loop {
         let mut line = String::new();
         if reader.read_line(&mut line).is_err() || line == "\r\n" || line == "\n" || line.is_empty() {
             break;
         }
-        if line.to_ascii_lowercase().starts_with("content-length:") {
+        let lower = line.to_ascii_lowercase();
+        if lower.starts_with("content-length:") {
             if let Some(v) = line.split(':').nth(1) {
                 content_length = v.trim().parse::<usize>().unwrap_or(0);
+            }
+        } else if lower.starts_with("x-telegram-user-id:") {
+            if let Some(v) = line.split(':').nth(1) {
+                tg_user_id_header = v.trim().parse::<i64>().ok();
+            }
+        } else if lower.starts_with("x-telegram-init-data:") {
+            if let Some((_, v)) = line.split_once(':') {
+                tg_init_data_header = v.trim().to_string();
             }
         }
     }
 
     if method == "OPTIONS" {
-        let resp = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization\r\nContent-Length: 0\r\n\r\n";
+        let resp = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization, X-Telegram-Init-Data, X-Telegram-User-Id\r\nContent-Length: 0\r\n\r\n";
         let _ = stream.write_all(resp.as_bytes());
         return;
     }
@@ -465,10 +477,32 @@ fn handle_http_client(mut stream: TcpStream, cfg: BotConfig, state: SharedBotSta
 
     match (method, path) {
         ("GET", "/api/state") => {
+            if !is_authorized_telegram_request(&state, tg_user_id_header, &tg_init_data_header) {
+                send_json(
+                    &mut stream,
+                    403,
+                    &Json::obj(vec![
+                        ("ok", Json::Bool(false)),
+                        ("error", Json::Str("UNAUTHORIZED_TELEGRAM_ID".into())),
+                    ]),
+                );
+                return;
+            }
             let payload = build_api_state(&cfg, &state);
             send_json(&mut stream, 200, &payload);
         }
         ("POST", "/api/prompt") => {
+            if !is_authorized_telegram_request(&state, tg_user_id_header, &tg_init_data_header) {
+                send_json(
+                    &mut stream,
+                    403,
+                    &Json::obj(vec![
+                        ("ok", Json::Bool(false)),
+                        ("error", Json::Str("UNAUTHORIZED_TELEGRAM_ID".into())),
+                    ]),
+                );
+                return;
+            }
             if let Some(j) = Json::parse_opt(&body) {
                 let spec = PromptDispatchSpec {
                     conversation_id: j.get_str("conversationId").unwrap_or("default").to_string(),
@@ -509,6 +543,29 @@ fn handle_http_client(mut stream: TcpStream, cfg: BotConfig, state: SharedBotSta
             );
         }
     }
+}
+
+/// Verifies that the HTTP request to `/api/state` or `/api/prompt` originates from a Telegram Mini App
+/// session whose `user.id` matches the paired Harness Owner or an explicitly authorized Collaborator.
+/// Blocks any unauthenticated browser / incognito access (`403 Forbidden`).
+fn is_authorized_telegram_request(
+    state: &SharedBotState,
+    tg_user_id_header: Option<i64>,
+    tg_init_data_header: &str,
+) -> bool {
+    if tg_init_data_header.trim().is_empty() {
+        return false;
+    }
+    let uid = match tg_user_id_header {
+        Some(id) if id != 0 => id,
+        _ => return false,
+    };
+
+    let guard = state.0.lock().unwrap();
+    if guard.owner_user_id == Some(uid) {
+        return true;
+    }
+    guard.collaborators.iter().any(|c| c.user_id == uid)
 }
 
 fn build_api_state(cfg: &BotConfig, state: &SharedBotState) -> Json {

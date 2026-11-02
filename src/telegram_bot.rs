@@ -350,8 +350,9 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
 
     let _ = fs::create_dir_all(".thm");
     let map_path = Path::new(".thm").join("topics_map.json");
+    let prompts_path = Path::new(".thm").join("topics_prompts.json");
     let schema_path = Path::new(".thm").join("topics_schema.txt");
-    let current_schema = "v5_exact_project_names";
+    let current_schema = "v6_real_user_prompts_only";
 
     let mut persisted_map: BTreeMap<String, i64> = BTreeMap::new();
     if let Ok(raw) = fs::read_to_string(&map_path) {
@@ -359,6 +360,17 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
             for (k, v) in obj {
                 if let Some(tid) = v.as_i64() {
                     persisted_map.insert(k, tid);
+                }
+            }
+        }
+    }
+
+    let mut persisted_prompts: BTreeMap<String, usize> = BTreeMap::new();
+    if let Ok(raw) = fs::read_to_string(&prompts_path) {
+        if let Some(Json::Object(obj)) = Json::parse_opt(&raw) {
+            for (k, v) in obj {
+                if let Some(cnt) = v.as_i64() {
+                    persisted_prompts.insert(k, cnt.max(0) as usize);
                 }
             }
         }
@@ -378,6 +390,7 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
             );
         }
         persisted_map.clear();
+        persisted_prompts.clear();
         let _ = fs::write(&schema_path, current_schema);
     }
 
@@ -527,7 +540,7 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
             }
 
             // 2. INDIVIDUAL PROMPTS OF THE THREAD AS PINNED MESSAGES (for in-thread history navigation)
-            let max_prompts_to_pin = 8usize;
+            let max_prompts_to_pin = 10usize;
             let start_idx = disc.prompts.len().saturating_sub(max_prompts_to_pin);
             for p_turn in &disc.prompts[start_idx..] {
                 let prompt_html = format!(
@@ -545,17 +558,48 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
                     let _ = pin_telegram_message(&cfg.bot_token, owner_id, pmid);
                 }
             }
+            persisted_prompts.insert(disc.conversation_id.clone(), disc.prompts.len());
+        } else {
+            let prev_count = persisted_prompts
+                .get(&disc.conversation_id)
+                .copied()
+                .unwrap_or(disc.prompts.len());
+            if disc.prompts.len() > prev_count {
+                for p_turn in &disc.prompts[prev_count..] {
+                    let prompt_html = format!(
+                        "📌 <b>Prompt #{}</b> — <code>{}</code>\n\n💬 <b>Prompt Utente:</b>\n<blockquote>{}</blockquote>\n\n✅ <b>Output Harness:</b>\n{}\n\n<blockquote expandable><b>🧠 Thinking &amp; Passaggi ({} tool)</b>\n{}</blockquote>",
+                        p_turn.index,
+                        escape_html(&disc.title),
+                        escape_html(&p_turn.user_prompt),
+                        escape_html(&p_turn.final_output),
+                        p_turn.tool_count,
+                        escape_html(&p_turn.thinking_summary)
+                    );
+                    if let Ok(Some(pmid)) =
+                        send_telegram_html_with_id(&cfg.bot_token, owner_id, thread_id, &prompt_html, None)
+                    {
+                        let _ = pin_telegram_message(&cfg.bot_token, owner_id, pmid);
+                    }
+                }
+                persisted_prompts.insert(disc.conversation_id.clone(), disc.prompts.len());
+            }
         }
 
         synced_count += 1;
     }
 
-    // Persist updated topic mappings
+    // Persist updated topic mappings and prompt counts
     let mut map_entries = Vec::new();
     for (k, v) in &persisted_map {
         map_entries.push((k.as_str(), Json::Number(*v as f64)));
     }
     let _ = fs::write(&map_path, Json::obj(map_entries).stringify());
+
+    let mut prompt_entries = Vec::new();
+    for (k, v) in &persisted_prompts {
+        prompt_entries.push((k.as_str(), Json::Number(*v as f64)));
+    }
+    let _ = fs::write(&prompts_path, Json::obj(prompt_entries).stringify());
 
     synced_count
 }
@@ -609,8 +653,14 @@ fn run_cloud_bridge_polling_loop(cfg: BotConfig, state: SharedBotState) {
 
 fn run_direct_telegram_polling_loop(cfg: BotConfig, state: SharedBotState) {
     let mut offset: i64 = 0;
+    let mut poll_cycles: u64 = 0;
 
     loop {
+        poll_cycles += 1;
+        if poll_cycles % 2 == 0 {
+            let _ = sync_local_projects_and_topics(&cfg, &state);
+        }
+
         let get_updates_req = Json::obj(vec![
             ("offset", Json::Number(offset as f64)),
             ("timeout", Json::Number(15.0)),
