@@ -1467,7 +1467,7 @@ pub fn deliver_task_output_to_telegram(
         return Ok(());
     }
 
-    let (target_chat, target_topic, lang) = {
+    let (target_chat, mut target_topic, lang) = {
         let guard = state.0.lock().unwrap();
         let sess = guard.sessions.get(&summary.conversation_id);
         let chat = sess
@@ -1481,6 +1481,14 @@ pub fn deliver_task_output_to_telegram(
             .unwrap_or_else(|| cfg.default_locale.clone());
         (chat, topic, loc)
     };
+
+    if target_topic.is_none() {
+        if let Ok(raw) = fs::read_to_string(".thm/topics_map.json") {
+            if let Some(j) = Json::parse_opt(&raw) {
+                target_topic = j.get_i64(&summary.conversation_id);
+            }
+        }
+    }
 
     if target_chat == 0 {
         return Err("No paired Owner chat ID yet. Run `/start` on the Telegram Bot.".into());
