@@ -1,0 +1,17 @@
+# Personal and Educational Free License (PEF License / PEFL)
+# Version 1.0 - 2026-05-26
+# Copyright (c) 2026 Rubens Rainelli (rubens@rainelli.it)
+# Official Specification: https://github.com/RubensRainelli/pefl-license-spec
+
+[package]
+name = "telegram-harness-manager"
+version = "1.0.0"
+edition = "2021"
+authors = ["Rubens Rainelli <rubens@rainelli.it>"]
+description = "Telegram Harness Manager - Multi-Harness Skill, Telegram Bot & Serverless Bridge for Antigravity, Claude Code, OpenCode & DeepSeek"
+license-file = "LICENSE"
+repository = "https://github.com/RubensRainelli/telegram-harness-manager"
+
+[[bin]]
+name = "telegram-harness-manager"
+path = "src/main.rs"

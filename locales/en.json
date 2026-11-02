@@ -1,0 +1,70 @@
+{
+  "_meta": {
+    "language": "English",
+    "code": "en",
+    "is_default": true,
+    "contributors": ["Rubens Rainelli"]
+  },
+  "bot": {
+    "welcome_title": "🚀 <b>Telegram Harness Manager</b>",
+    "welcome_body": "Manage your local AI Coding Harnesses (<b>Antigravity</b>, <b>Claude Code</b>, <b>OpenCode</b>, <b>DeepSeek</b>, <b>Aider</b>) directly from Telegram with multi-conversation topics, execution controls, and team collaboration.\n\n• Run <code>telegram-harness-manager pair</code> on your PC to link your machine.\n• Each Conversation runs in its own dedicated <b>Forum Topic</b>.\n• Configure <b>Model</b>, <b>Thinking Level</b>, and <b>Agent Permissions</b> per topic or per prompt.",
+    "pair_success": "✅ <b>Device Paired Successfully!</b>\n\n💻 <b>Machine:</b> <code>{device_name}</code>\n🔑 <b>Owner ID:</b> <code>{user_id}</code>\n\nOnly you (and the guests you explicitly invite per project) can access your projects.",
+    "pair_invalid": "❌ Invalid or expired pairing code. Run <code>telegram-harness-manager pair</code> on your PC to generate a fresh code.",
+    "no_devices": "⚠️ You don't have any paired PC yet.\nRun <code>telegram-harness-manager pair</code> in your terminal and tap the pairing link.",
+    "control_center_title": "⚙️ <b>Harness Control Center</b>",
+    "control_center_body": "Select a project below to open a new conversation topic, configure default Harness/Model/Thinking/Permissions, or manage invited collaborators.",
+    "topic_config_bar": "🗂 <b>Project:</b> <code>{project}</code> · 💬 <b>Session:</b> <code>{title}</code>\n🔌 <b>Harness:</b> <code>{harness}</code> · 🤖 <b>Model:</b> <code>{model}</code>\n🧠 <b>Thinking:</b> <code>{thinking}</code> · 🛡️ <b>Permissions:</b> <code>{permissions}</code>",
+    "prompt_queued_owner": "⚡ <i>Task dispatched to {harness} ({model} · Thinking: {thinking} · Mode: {permissions}). You will receive the final output when finished.</i>",
+    "prompt_held_for_approval": "✋ <b>Approval Required:</b> Your prompt on <code>{project}</code> has been sent to the project Owner for confirmation.",
+    "owner_approval_card": "👤 <b>Collaborator Prompt Request</b>\n\n<b>From:</b> {author}\n<b>Project:</b> <code>{project}</code> (Topic: <code>{topic}</code>)\n<b>Requested Config:</b> 🤖 <code>{model}</code> · 🧠 <code>{thinking}</code> · 🛡️ <code>{permissions}</code>\n\n<blockquote>{prompt}</blockquote>",
+    "viewer_denied": "⛔ <b>Read-Only Access (Viewer):</b> You can view outputs, thinking steps, and Git diffs in this project, but you are not allowed to launch prompts.",
+    "task_completed_header": "✅ <b>Output Ready</b> · <code>{project}</code> ({harness})",
+    "steps_expandable_header": "🧠 {steps_count} steps · {files_count} files touched (Tap to expand thinking & logs)",
+    "interactive_question_header": "❓ <b>{harness} requires your input</b>\n🗂 <code>{project}</code> · 💬 <code>{topic}</code>",
+    "interactive_multi_hint": "<i>Select one or more options below, then tap Confirm Selection:</i>",
+    "interactive_single_hint": "<i>Choose an option below or reply to this message with custom instructions:</i>",
+    "permission_request_header": "🛡️ <b>Tool Permission Request ({tool})</b>\n🗂 <code>{project}</code>",
+    "group_not_owner": "⛔ <b>Access Denied:</b> Only a verified Harness Owner with a paired machine can add and link this bot to a group.",
+    "group_check_failed": "⚠️ <b>Group Setup Pre-flight Check Incomplete</b>\n\nTo organize conversations safely, please verify:\n1. <b>Forum Topics Enabled:</b> {topics_status}\n2. <b>Bot is Administrator:</b> {admin_status}\n3. <b>'Manage Topics' Permission:</b> {manage_topics_status}\n\n<i>Default member role is automatically locked to 👁️ <b>Viewer (Read-Only)</b> so nobody can trigger prompts without your permission.</i>",
+    "group_setup_ok": "✅ <b>Group Linked & Verified!</b>\n\n• <b>Forum Topics:</b> Enabled\n• <b>Manage Topics Permission:</b> Granted\n• <b>Default Member Role:</b> 👁️ <code>Viewer (Read-Only)</code>\n\nAs the Harness Owner, you can promote specific members to <b>Proposer (Manual Approval)</b> or <b>Executor</b> from the Control Center or Mini App.",
+    "invite_created": "🔗 <b>Collaborator Invite Link Created</b>\n\n🗂 <b>Project:</b> <code>{project}</code>\n🎭 <b>Role:</b> <code>{role}</code>\n🔗 <b>Link:</b> {link}\n\n<i>Share this link with your collaborator. You can change or revoke their role at any time.</i>",
+    "invite_accepted": "🎉 <b>Invite Accepted!</b>\nYou now have <b>{role}</b> access to project <code>{project}</code>."
+  },
+  "buttons": {
+    "new_conversation": "➕ New Conversation Topic",
+    "change_harness": "🔌 Harness: {value}",
+    "change_model": "🤖 Model: {value}",
+    "change_thinking": "🧠 Thinking: {value}",
+    "change_permissions": "🛡️ Perms: {value}",
+    "open_mini_app": "📱 Open Mini App (Thinking & Diffs)",
+    "manage_guests": "👥 Collaborators & Guests",
+    "approve_once": "✅ Approve",
+    "approve_session": "🛡️ Always Allow in Session",
+    "reject": "❌ Reject",
+    "custom_reply": "✏️ Custom Reply",
+    "confirm_multi": "✅ Confirm Selection ({count})",
+    "owner_approve_run": "✅ Approve & Execute",
+    "owner_ downgrade_plan": "📋 Run as Plan-Only",
+    "owner_reject": "❌ Reject Prompt",
+    "recheck_group": "🔄 Re-check Group Permissions"
+  },
+  "roles": {
+    "owner": "👑 Owner (Full Control)",
+    "executor": "🚀 Executor (Direct Execution)",
+    "proposer": "✋ Proposer (Requires Owner Approval)",
+    "viewer": "👁️ Viewer (Read-Only)"
+  },
+  "thinking_levels": {
+    "none": "⚡ None (Fast)",
+    "low": "💡 Low",
+    "medium": "🧠 Medium",
+    "high": "🔬 High",
+    "max": "🌌 Max (UltraThink)"
+  },
+  "permission_modes": {
+    "plan": "📋 Plan (Read-Only)",
+    "ask": "🙋 Supervised (Ask)",
+    "auto_edit": "✏️ Auto-Edit Files",
+    "auto": "🚀 Full Auto (Turbo)"
+  }
+}

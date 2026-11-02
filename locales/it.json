@@ -1,0 +1,70 @@
+{
+  "_meta": {
+    "language": "Italiano",
+    "code": "it",
+    "is_default": false,
+    "contributors": ["Rubens Rainelli"]
+  },
+  "bot": {
+    "welcome_title": "🚀 <b>Telegram Harness Manager</b>",
+    "welcome_body": "Gestisci i tuoi AI Coding Harness locali (<b>Antigravity</b>, <b>Claude Code</b>, <b>OpenCode</b>, <b>DeepSeek</b>, <b>Aider</b>) direttamente da Telegram con topic multi-conversazione, controllo di modello/thinking/permessi e collaborazione in team.\n\n• Esegui <code>telegram-harness-manager pair</code> sul PC per collegare la tua macchina.\n• Ogni Conversazione vive in un <b>Forum Topic</b> dedicato (un progetto può avere più topic in parallelo).\n• Configura <b>Modello</b>, <b>Livello di Pensiero</b> e <b>Permessi Agente</b> per ogni topic o singolo prompt.",
+    "pair_success": "✅ <b>PC Collegato con Successo!</b>\n\n💻 <b>Macchina:</b> <code>{device_name}</code>\n🔑 <b>Owner ID:</b> <code>{user_id}</code>\n\nSolo tu (e gli eventuali invitati che autorizzi sui singoli progetti) potete accedere ai tuoi progetti.",
+    "pair_invalid": "❌ Codice di pairing non valido o scaduto. Esegui <code>telegram-harness-manager pair</code> sul tuo PC per generarne uno nuovo.",
+    "no_devices": "⚠️ Non hai ancora nessun PC collegato.\nEsegui <code>telegram-harness-manager pair</code> nel terminale del PC e premi sul link di collegamento.",
+    "control_center_title": "⚙️ <b>Control Center Harness</b>",
+    "control_center_body": "Seleziona un progetto qui sotto per aprire un nuovo Topic di conversazione, configurare Harness/Modello/Thinking/Permessi predefiniti o gestire gli invitati.",
+    "topic_config_bar": "🗂 <b>Progetto:</b> <code>{project}</code> · 💬 <b>Sessione:</b> <code>{title}</code>\n🔌 <b>Harness:</b> <code>{harness}</code> · 🤖 <b>Modello:</b> <code>{model}</code>\n🧠 <b>Thinking:</b> <code>{thinking}</code> · 🛡️ <b>Permessi:</b> <code>{permissions}</code>",
+    "prompt_queued_owner": "⚡ <i>Prompt inviato a {harness} ({model} · Thinking: {thinking} · Permessi: {permissions}). Riceverai il messaggio con l'output appena avrà finito.</i>",
+    "prompt_held_for_approval": "✋ <b>In attesa di approvazione:</b> Il tuo prompt su <code>{project}</code> è stato inviato all'Owner del progetto per la conferma manuale.",
+    "owner_approval_card": "👤 <b>Richiesta Esecuzione Prompt da Collaboratore</b>\n\n<b>Da:</b> {author}\n<b>Progetto:</b> <code>{project}</code> (Topic: <code>{topic}</code>)\n<b>Configurazione richiesta:</b> 🤖 <code>{model}</code> · 🧠 <code>{thinking}</code> · 🛡️ <code>{permissions}</code>\n\n<blockquote>{prompt}</blockquote>",
+    "viewer_denied": "⛔ <b>Accesso in Sola Lettura (Viewer):</b> Puoi visualizzare output, passaggi di thinking e Git diff di questo progetto, ma non sei autorizzato a lanciare prompt.",
+    "task_completed_header": "✅ <b>Output Completato</b> · <code>{project}</code> ({harness})",
+    "steps_expandable_header": "🧠 {steps_count} passaggi · {files_count} file toccati (Tocca per espandere thinking e log)",
+    "interactive_question_header": "❓ <b>{harness} richiede una tua scelta</b>\n🗂 <code>{project}</code> · 💬 <code>{topic}</code>",
+    "interactive_multi_hint": "<i>Seleziona una o più opzioni qui sotto, poi premi Conferma Selezione:</i>",
+    "interactive_single_hint": "<i>Scegli un'opzione qui sotto oppure rispondi (Reply) a questo messaggio con testo libero:</i>",
+    "permission_request_header": "🛡️ <b>Richiesta Permesso Tool ({tool})</b>\n🗂 <code>{project}</code>",
+    "group_not_owner": "⛔ <b>Operazione Negata:</b> Solo l'Owner verificato di un Harness collegato può aggiungere e configurare il bot in un gruppo.",
+    "group_check_failed": "⚠️ <b>Verifica Prerequisiti Gruppo Non Superata</b>\n\nPer usare il bot in sicurezza nel gruppo, verifica questi punti:\n1. <b>Topic (Forum) Attivi nel Gruppo:</b> {topics_status}\n2. <b>Bot Promosso ad Amministratore:</b> {admin_status}\n3. <b>Permesso 'Gestire i Topic' attivo:</b> {manage_topics_status}\n\n<i>Nota di sicurezza: il ruolo predefinito per i membri del gruppo viene impostato automaticamente su 👁️ <b>Sola Lettura (Viewer)</b> per evitare che qualcuno faccia danni.</i>",
+    "group_setup_ok": "✅ <b>Gruppo Collegato e Verificato!</b>\n\n• <b>Topic (Forum):</b> Attivi\n• <b>Permesso Gestione Topic:</b> Confermato\n• <b>Ruolo Predefinito Membri:</b> 👁️ <code>Sola Lettura (Viewer)</code>\n\nCome Owner dell'Harness, puoi decidere cosa può fare ogni utente (Sola Lettura, Modifica con Approvazione Manuale, o Esecuzione Diretta) dal Control Center o dalla Mini App.",
+    "invite_created": "🔗 <b>Link d'Invito Collaboratore Creato</b>\n\n🗂 <b>Progetto:</b> <code>{project}</code>\n🎭 <b>Ruolo:</b> <code>{role}</code>\n🔗 <b>Link:</b> {link}\n\n<i>Invia questo link al tuo collaboratore. Puoi modificare o revocare i suoi permessi in qualsiasi momento.</i>",
+    "invite_accepted": "🎉 <b>Invito Accettato!</b>\nOra hai accesso con ruolo <b>{role}</b> al progetto <code>{project}</code>."
+  },
+  "buttons": {
+    "new_conversation": "➕ Nuova Conversazione (Topic)",
+    "change_harness": "🔌 Harness: {value}",
+    "change_model": "🤖 Modello: {value}",
+    "change_thinking": "🧠 Thinking: {value}",
+    "change_permissions": "🛡️ Permessi: {value}",
+    "open_mini_app": "📱 Apri Mini App (Thinking & Diff)",
+    "manage_guests": "👥 Invitati & Permessi Team",
+    "approve_once": "✅ Approva",
+    "approve_session": "🛡️ Approva sempre nella sessione",
+    "reject": "❌ Rifiuta",
+    "custom_reply": "✏️ Risposta libera",
+    "confirm_multi": "✅ Conferma Selezione ({count})",
+    "owner_approve_run": "✅ Approva ed Esegui",
+    "owner_ downgrade_plan": "📋 Esegui solo in Plan (Read-Only)",
+    "owner_reject": "❌ Rifiuta Prompt",
+    "recheck_group": "🔄 Ricontrolla Permessi Gruppo"
+  },
+  "roles": {
+    "owner": "👑 Owner (Controllo Totale)",
+    "executor": "🚀 Esecuzione Diretta (Executor)",
+    "proposer": "✋ Modifica con Approvazione Owner",
+    "viewer": "👁️ Sola Lettura (Viewer)"
+  },
+  "thinking_levels": {
+    "none": "⚡ Nessuno (Rapido)",
+    "low": "💡 Basso (Low)",
+    "medium": "🧠 Medio (Medium)",
+    "high": "🔬 Alto (High)",
+    "max": "🌌 Massimo (UltraThink)"
+  },
+  "permission_modes": {
+    "plan": "📋 Plan (Sola Lettura)",
+    "ask": "🙋 Supervisionato (Chiedi)",
+    "auto_edit": "✏️ Auto-Edit File",
+    "auto": "🚀 Full Auto (Turbo)"
+  }
+}

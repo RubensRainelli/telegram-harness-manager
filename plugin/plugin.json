@@ -1,0 +1,12 @@
+{
+  "name": "telegram-harness-manager",
+  "displayName": "Telegram Harness Manager",
+  "description": "Manage Antigravity, Claude Code, OpenCode, and DeepSeek projects from Telegram with per-conversation Forum Topics, Model/Thinking/Permission controls, interactive multi-option prompts, on-demand Thinking/Diff inspection, and team collaborator roles (Viewer, Proposer with Owner Approval, Executor).",
+  "version": "1.0.0",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Avvia il demone Telegram Harness Manager e collega questo progetto a Telegram",
+    "Genera un link d'invito collaboratore con approvazione manuale (Proposer) per questo progetto",
+    "Invia una domanda a scelta multipla su Telegram per decidere come procedere"
+  ]
+}

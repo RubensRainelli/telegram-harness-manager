@@ -1,0 +1,21 @@
+# Build & Dependencies
+/target/
+/node_modules/
+/dist/
+
+# Private Environment & Secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+tgcloud.jsonc
+.tgcloud/
+
+# Local Runtime State & User Pairing Tokens
+.thm/
+.thm_state.json
+.pefl_accepted_*
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.log

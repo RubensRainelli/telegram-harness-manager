@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command|Bash|edit_file|write_file|ask_question",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "telegram-harness-manager hook pre-tool",
+            "timeout": 240
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "telegram-harness-manager hook stop",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

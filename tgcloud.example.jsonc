@@ -1,0 +1,24 @@
+// Personal and Educational Free License (PEFL) v1.0 - Copyright (c) 2026 Rubens Rainelli
+// Telegram Serverless Configuration Template (`tgcloud.example.jsonc`)
+// Copy to `tgcloud.jsonc` (which is git-ignored) and replace placeholders before running `npx tgcloud push`.
+{
+  "$schema": "https://core.telegram.org/bots/serverless/schema.json",
+  "appId": "YOUR_TGCLOUD_APP_ID",
+  "bot": {
+    "username": "Your_Harness_Bot",
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "entry": "tgcloud/bot/webhook.js",
+    "threadedMode": true
+  },
+  "database": {
+    "engine": "sqlite",
+    "migrationsDir": "tgcloud/db/migrations"
+  },
+  "endpoints": {
+    "dir": "tgcloud/endpoints"
+  },
+  "webapp": {
+    "dir": "docs",
+    "index": "index.html"
+  }
+}
