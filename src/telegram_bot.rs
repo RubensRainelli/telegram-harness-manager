@@ -51,6 +51,10 @@ pub struct ConversationSession {
     pub project_name: String,
     pub workspace: String,
     pub title: String,
+    pub rank: usize,
+    pub archived: bool,
+    pub step_count: usize,
+    pub last_thinking: String,
     pub owner_user_id: i64,
     pub chat_id: i64,
     pub topic_id: Option<i64>,
@@ -278,8 +282,50 @@ pub fn spawn_telegram_worker(cfg: BotConfig, state: SharedBotState) {
     });
 }
 
-/// Scans real local conversations (`~/.gemini/antigravity/brain`) and ensures each one has
-/// its own dedicated Telegram Forum Topic (`createForumTopic`) with its Config Bar and latest status.
+/// Converts a 1-based thread rank into keycap number emoji (`1️⃣`, `2️⃣`, ..., `🔟`, `1️⃣1️⃣`, ...)
+pub fn number_to_emoji(rank: usize) -> String {
+    match rank {
+        1 => "1️⃣".to_string(),
+        2 => "2️⃣".to_string(),
+        3 => "3️⃣".to_string(),
+        4 => "4️⃣".to_string(),
+        5 => "5️⃣".to_string(),
+        6 => "6️⃣".to_string(),
+        7 => "7️⃣".to_string(),
+        8 => "8️⃣".to_string(),
+        9 => "9️⃣".to_string(),
+        10 => "🔟".to_string(),
+        n => n
+            .to_string()
+            .chars()
+            .map(|c| match c {
+                '0' => "0️⃣",
+                '1' => "1️⃣",
+                '2' => "2️⃣",
+                '3' => "3️⃣",
+                '4' => "4️⃣",
+                '5' => "5️⃣",
+                '6' => "6️⃣",
+                '7' => "7️⃣",
+                '8' => "8️⃣",
+                '9' => "9️⃣",
+                _ => "#",
+            })
+            .collect(),
+    }
+}
+
+/// Scans real local conversations (`~/.gemini/antigravity/brain` + `annotations/*.pbtxt`) and ensures:
+/// 1. Archived threads (`archived: true`) NEVER appear in Telegram Forum Topics (deleted if present; available only via Mini App).
+/// 2. Active threads are ordered from most recently used (`1️⃣`) to least recently used (`N`) with format:
+///    `<numero emoji> <nome thread harness>`
+/// 3. Inside each thread, the FIRST pinned message contains:
+///    - Nome Progetto
+///    - Nome Thread
+///    - Modello
+///    - Thinking
+///    - Permessi
+/// 4. Individual prompts of the thread are sent and PINNED (`pinChatMessage`) inside that single thread for history navigation.
 pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -> usize {
     if cfg.mode != "direct"
         || cfg.bot_token.is_empty()
@@ -304,6 +350,9 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
 
     let _ = fs::create_dir_all(".thm");
     let map_path = Path::new(".thm").join("topics_map.json");
+    let schema_path = Path::new(".thm").join("topics_schema.txt");
+    let current_schema = "v5_exact_project_names";
+
     let mut persisted_map: BTreeMap<String, i64> = BTreeMap::new();
     if let Ok(raw) = fs::read_to_string(&map_path) {
         if let Some(Json::Object(obj)) = Json::parse_opt(&raw) {
@@ -315,45 +364,127 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
         }
     }
 
-    // Clean up old test topic 1563967 if present and unmapped
-    if !persisted_map.values().any(|&v| v == 1563967) {
-        let _ = telegram_api_call(
-            &cfg.bot_token,
-            "deleteForumTopic",
-            &Json::obj(vec![
-                ("chat_id", Json::Number(owner_id as f64)),
-                ("message_thread_id", Json::Number(1563967.0)),
-            ]),
-        );
+    // If upgrading from an older topic naming schema, clean up all old Telegram Forum Topics first
+    let saved_schema = fs::read_to_string(&schema_path).unwrap_or_default();
+    if saved_schema.trim() != current_schema {
+        for &old_tid in persisted_map.values() {
+            let _ = telegram_api_call(
+                &cfg.bot_token,
+                "deleteForumTopic",
+                &Json::obj(vec![
+                    ("chat_id", Json::Number(owner_id as f64)),
+                    ("message_thread_id", Json::Number(old_tid as f64)),
+                ]),
+            );
+        }
+        persisted_map.clear();
+        let _ = fs::write(&schema_path, current_schema);
     }
 
-    let discovered = scan_local_conversations(8);
+    let discovered = scan_local_conversations(30);
+
+    // 1. Store archived threads in state (for Mini App inspection) and remove them from Telegram topics if present
+    for disc in discovered.iter().filter(|d| d.archived) {
+        if let Some(old_tid) = persisted_map.remove(&disc.conversation_id) {
+            let _ = telegram_api_call(
+                &cfg.bot_token,
+                "deleteForumTopic",
+                &Json::obj(vec![
+                    ("chat_id", Json::Number(owner_id as f64)),
+                    ("message_thread_id", Json::Number(old_tid as f64)),
+                ]),
+            );
+        }
+        let archived_sess = ConversationSession {
+            conversation_id: disc.conversation_id.clone(),
+            project_name: disc.project_name.clone(),
+            workspace: disc.workspace.clone(),
+            title: disc.title.clone(),
+            rank: 0,
+            archived: true,
+            step_count: disc.step_count,
+            last_thinking: disc.last_thinking.clone(),
+            owner_user_id: owner_id,
+            chat_id: owner_id,
+            topic_id: None,
+            harness: disc.harness.clone(),
+            model: "gemini-4-argon".to_string(),
+            thinking_level: "medium".to_string(),
+            permission_mode: "ask".to_string(),
+        };
+        state
+            .0
+            .lock()
+            .unwrap()
+            .sessions
+            .insert(disc.conversation_id.clone(), archived_sess);
+    }
+
+    // 2. Active (non-archived) threads, ordered from most recently used (rank 1) to least recently used (rank N)
+    let active_threads: Vec<(usize, _)> = discovered
+        .iter()
+        .filter(|d| !d.archived)
+        .enumerate()
+        .map(|(idx, d)| (idx + 1, d))
+        .collect();
+
+    // Remove any stale topic in `persisted_map` that is no longer in `active_threads`
+    let active_ids: Vec<String> = active_threads
+        .iter()
+        .map(|(_, d)| d.conversation_id.clone())
+        .collect();
+    let stale_keys: Vec<String> = persisted_map
+        .keys()
+        .filter(|k| !active_ids.contains(k))
+        .cloned()
+        .collect();
+    for k in stale_keys {
+        if let Some(old_tid) = persisted_map.remove(&k) {
+            let _ = telegram_api_call(
+                &cfg.bot_token,
+                "deleteForumTopic",
+                &Json::obj(vec![
+                    ("chat_id", Json::Number(owner_id as f64)),
+                    ("message_thread_id", Json::Number(old_tid as f64)),
+                ]),
+            );
+        }
+    }
+
     let mut synced_count = 0usize;
 
-    for disc in discovered {
-        let topic_title = format!(
-            "📁 [{}] 💬 {}",
-            disc.project_name,
-            truncate_str(&disc.title, 42)
-        );
+    // Iterate in REVERSE order (from least recent N down to most recent 1️⃣) when creating/populating topics
+    // so that `1️⃣` has the latest message timestamp and sits at the very top of Telegram's topic list!
+    for &(rank, disc) in active_threads.iter().rev() {
+        let emoji_num = number_to_emoji(rank);
+        let topic_title = format!("{} {}", emoji_num, truncate_str(&disc.title, 96));
 
         let mut thread_id = persisted_map.get(&disc.conversation_id).copied();
         let mut is_new_topic = false;
 
-        if thread_id.is_none() {
-            if let Ok(res) = telegram_api_call(
+        if let Some(existing_tid) = thread_id {
+            // Ensure topic title reflects current rank emoji and thread name
+            let _ = telegram_api_call(
                 &cfg.bot_token,
-                "createForumTopic",
+                "editForumTopic",
                 &Json::obj(vec![
                     ("chat_id", Json::Number(owner_id as f64)),
+                    ("message_thread_id", Json::Number(existing_tid as f64)),
                     ("name", Json::Str(topic_title.clone())),
                 ]),
-            ) {
-                if let Some(tid) = res.get("result").and_then(|r| r.get_i64("message_thread_id")) {
-                    thread_id = Some(tid);
-                    persisted_map.insert(disc.conversation_id.clone(), tid);
-                    is_new_topic = true;
-                }
+            );
+        } else if let Ok(res) = telegram_api_call(
+            &cfg.bot_token,
+            "createForumTopic",
+            &Json::obj(vec![
+                ("chat_id", Json::Number(owner_id as f64)),
+                ("name", Json::Str(topic_title.clone())),
+            ]),
+        ) {
+            if let Some(tid) = res.get("result").and_then(|r| r.get_i64("message_thread_id")) {
+                thread_id = Some(tid);
+                persisted_map.insert(disc.conversation_id.clone(), tid);
+                is_new_topic = true;
             }
         }
 
@@ -361,7 +492,11 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
             conversation_id: disc.conversation_id.clone(),
             project_name: disc.project_name.clone(),
             workspace: disc.workspace.clone(),
-            title: topic_title.clone(),
+            title: disc.title.clone(),
+            rank,
+            archived: false,
+            step_count: disc.step_count,
+            last_thinking: disc.last_thinking.clone(),
             owner_user_id: owner_id,
             chat_id: owner_id,
             topic_id: thread_id,
@@ -384,17 +519,32 @@ pub fn sync_local_projects_and_topics(cfg: &BotConfig, state: &SharedBotState) -
         }
 
         if is_new_topic {
-            send_or_edit_topic_config_bar(cfg, owner_id, thread_id, None, &sess, &lang);
-            let status_html = format!(
-                "🗂 <b>Progetto:</b> <code>{}</code>\n🔑 <b>Session ID:</b> <code>{}</code>\n📊 <b>Passaggi registrati:</b> {}\n\n<b>Ultimo Prompt:</b>\n<blockquote>{}</blockquote>\n\n<b>Ultimo Output:</b>\n{}\n\n<blockquote expandable><b>🧠 Ultimo Thinking &amp; Contesto</b>\n{}</blockquote>",
-                escape_html(&disc.project_name),
-                escape_html(&disc.conversation_id[..disc.conversation_id.len().min(8)]),
-                disc.step_count,
-                escape_html(if disc.last_user_prompt.is_empty() { "Sessione attiva" } else { &disc.last_user_prompt }),
-                escape_html(if disc.last_output.is_empty() { "In attesa di istruzioni." } else { &disc.last_output }),
-                escape_html(if disc.last_thinking.is_empty() { "Nessun blocco thinking aggiuntivo." } else { &disc.last_thinking })
-            );
-            let _ = send_telegram_html(&cfg.bot_token, owner_id, thread_id, &status_html, None);
+            // 1. FIRST PINNED MESSAGE: Project Name, Thread Name, Model, Thinking, Permissions
+            if let Some(cfg_msg_id) =
+                send_or_edit_topic_config_bar(cfg, owner_id, thread_id, None, &sess, &lang)
+            {
+                let _ = pin_telegram_message(&cfg.bot_token, owner_id, cfg_msg_id);
+            }
+
+            // 2. INDIVIDUAL PROMPTS OF THE THREAD AS PINNED MESSAGES (for in-thread history navigation)
+            let max_prompts_to_pin = 8usize;
+            let start_idx = disc.prompts.len().saturating_sub(max_prompts_to_pin);
+            for p_turn in &disc.prompts[start_idx..] {
+                let prompt_html = format!(
+                    "📌 <b>Prompt #{}</b> — <code>{}</code>\n\n💬 <b>Prompt Utente:</b>\n<blockquote>{}</blockquote>\n\n✅ <b>Output Harness:</b>\n{}\n\n<blockquote expandable><b>🧠 Thinking &amp; Passaggi ({} tool)</b>\n{}</blockquote>",
+                    p_turn.index,
+                    escape_html(&disc.title),
+                    escape_html(&p_turn.user_prompt),
+                    escape_html(&p_turn.final_output),
+                    p_turn.tool_count,
+                    escape_html(&p_turn.thinking_summary)
+                );
+                if let Ok(Some(pmid)) =
+                    send_telegram_html_with_id(&cfg.bot_token, owner_id, thread_id, &prompt_html, None)
+                {
+                    let _ = pin_telegram_message(&cfg.bot_token, owner_id, pmid);
+                }
+            }
         }
 
         synced_count += 1;
@@ -792,7 +942,6 @@ fn handle_incoming_message(cfg: &BotConfig, state: &SharedBotState, msg: &Json) 
 
     if text == "/control" || text == "/projects" || text == "/settings" || text == "/sync" {
         let _ = sync_local_projects_and_topics(cfg, state);
-        let _ = sync_local_projects_and_topics(cfg, state);
         send_control_center(cfg, state, chat_id, topic_id, user_id, &lang);
         return;
     }
@@ -1018,7 +1167,12 @@ fn handle_callback_query(cfg: &BotConfig, state: &SharedBotState, cb: &Json) {
     if data == "new_topic" {
         let proj = current_project_name();
         let conv_id = format!("conv_{}", now_secs() % 100_000);
-        let topic_title = format!("📁 [{}] 💬 Session #{}", proj, &conv_id[conv_id.len().saturating_sub(4)..]);
+        let raw_title = format!(
+            "Thread #{} ({})",
+            &conv_id[conv_id.len().saturating_sub(4)..],
+            proj
+        );
+        let topic_title = format!("1️⃣ {}", raw_title);
 
         let mut created_thread_id = topic_id;
         if let Ok(res) = telegram_api_call(
@@ -1041,7 +1195,11 @@ fn handle_callback_query(cfg: &BotConfig, state: &SharedBotState, cb: &Json) {
             workspace: env::current_dir()
                 .map(|d| d.display().to_string())
                 .unwrap_or_default(),
-            title: topic_title.clone(),
+            title: raw_title,
+            rank: 1,
+            archived: false,
+            step_count: 1,
+            last_thinking: String::new(),
             owner_user_id: user_id,
             chat_id,
             topic_id: created_thread_id,
@@ -1059,7 +1217,11 @@ fn handle_callback_query(cfg: &BotConfig, state: &SharedBotState, cb: &Json) {
             guard.sessions.insert(conv_id.clone(), session.clone());
         }
 
-        send_or_edit_topic_config_bar(cfg, chat_id, created_thread_id, None, &session, &lang);
+        if let Some(cfg_mid) =
+            send_or_edit_topic_config_bar(cfg, chat_id, created_thread_id, None, &session, &lang)
+        {
+            let _ = pin_telegram_message(&cfg.bot_token, chat_id, cfg_mid);
+        }
         let _ = answer_callback(&cfg.bot_token, cb_id, Some(&topic_title));
         return;
     }
@@ -1327,7 +1489,7 @@ fn send_or_edit_topic_config_bar(
     edit_message_id: Option<i64>,
     sess: &ConversationSession,
     lang: &str,
-) {
+) -> Option<i64> {
     let thinking_label = t(
         Some(lang),
         &format!("thinking_levels.{}", sess.thinking_level),
@@ -1352,71 +1514,83 @@ fn send_or_edit_topic_config_bar(
         ],
     );
 
-    let kb = Json::obj(vec![(
-        "inline_keyboard",
+    let mut rows = vec![
         Json::Array(vec![
-            Json::Array(vec![
-                Json::obj(vec![
-                    (
-                        "text",
-                        Json::Str(t(
-                            Some(lang),
-                            "buttons.change_harness",
-                            &[("value", &sess.harness)],
-                        )),
-                    ),
-                    (
-                        "callback_data",
-                        Json::Str(format!("cfg:{}:harness", sess.conversation_id)),
-                    ),
-                ]),
-                Json::obj(vec![
-                    (
-                        "text",
-                        Json::Str(t(
-                            Some(lang),
-                            "buttons.change_model",
-                            &[("value", &sess.model)],
-                        )),
-                    ),
-                    (
-                        "callback_data",
-                        Json::Str(format!("cfg:{}:model", sess.conversation_id)),
-                    ),
-                ]),
+            Json::obj(vec![
+                (
+                    "text",
+                    Json::Str(t(
+                        Some(lang),
+                        "buttons.change_harness",
+                        &[("value", &sess.harness)],
+                    )),
+                ),
+                (
+                    "callback_data",
+                    Json::Str(format!("cfg:{}:harness", sess.conversation_id)),
+                ),
             ]),
-            Json::Array(vec![
-                Json::obj(vec![
-                    (
-                        "text",
-                        Json::Str(t(
-                            Some(lang),
-                            "buttons.change_thinking",
-                            &[("value", &sess.thinking_level)],
-                        )),
-                    ),
-                    (
-                        "callback_data",
-                        Json::Str(format!("cfg:{}:thinking", sess.conversation_id)),
-                    ),
-                ]),
-                Json::obj(vec![
-                    (
-                        "text",
-                        Json::Str(t(
-                            Some(lang),
-                            "buttons.change_permissions",
-                            &[("value", &sess.permission_mode)],
-                        )),
-                    ),
-                    (
-                        "callback_data",
-                        Json::Str(format!("cfg:{}:permissions", sess.conversation_id)),
-                    ),
-                ]),
+            Json::obj(vec![
+                (
+                    "text",
+                    Json::Str(t(
+                        Some(lang),
+                        "buttons.change_model",
+                        &[("value", &sess.model)],
+                    )),
+                ),
+                (
+                    "callback_data",
+                    Json::Str(format!("cfg:{}:model", sess.conversation_id)),
+                ),
             ]),
         ]),
-    )]);
+        Json::Array(vec![
+            Json::obj(vec![
+                (
+                    "text",
+                    Json::Str(t(
+                        Some(lang),
+                        "buttons.change_thinking",
+                        &[("value", &sess.thinking_level)],
+                    )),
+                ),
+                (
+                    "callback_data",
+                    Json::Str(format!("cfg:{}:thinking", sess.conversation_id)),
+                ),
+            ]),
+            Json::obj(vec![
+                (
+                    "text",
+                    Json::Str(t(
+                        Some(lang),
+                        "buttons.change_permissions",
+                        &[("value", &sess.permission_mode)],
+                    )),
+                ),
+                (
+                    "callback_data",
+                    Json::Str(format!("cfg:{}:permissions", sess.conversation_id)),
+                ),
+            ]),
+        ]),
+    ];
+
+    if cfg.webapp_url.starts_with("https://") {
+        rows.push(Json::Array(vec![Json::obj(vec![
+            (
+                "text",
+                Json::Str(t(Some(lang), "buttons.open_mini_app", &[])),
+            ),
+            (
+                "web_app",
+                Json::obj(vec![("url", Json::Str(cfg.webapp_url.clone()))]),
+            ),
+        ])]));
+    }
+
+    let kb = Json::obj(vec![("inline_keyboard", Json::Array(rows))]);
 
     if let Some(mid) = edit_message_id {
         let _ = telegram_api_call(
@@ -1430,8 +1604,11 @@ fn send_or_edit_topic_config_bar(
                 ("reply_markup", kb),
             ]),
         );
+        Some(mid)
     } else {
-        let _ = send_telegram_html(&cfg.bot_token, chat_id, topic_id, &text, Some(kb));
+        send_telegram_html_with_id(&cfg.bot_token, chat_id, topic_id, &text, Some(kb))
+            .ok()
+            .flatten()
     }
 }
 
@@ -1536,13 +1713,18 @@ pub fn deliver_task_output_to_telegram(
     }
 
     let full_html = format!(
-        "{}\n\n{}{}",
+        "📌 {}\n\n{}{}",
         header,
         escape_html(&truncate_str(&summary.final_output, 2900)),
         expandable
     );
 
-    send_telegram_html(&cfg.bot_token, target_chat, target_topic, &full_html, None)
+    if let Some(mid) =
+        send_telegram_html_with_id(&cfg.bot_token, target_chat, target_topic, &full_html, None)?
+    {
+        let _ = pin_telegram_message(&cfg.bot_token, target_chat, mid);
+    }
+    Ok(())
 }
 
 /// Sends an Interactive Question (Single-Select, Multi-Select Checkboxes, or Tool Approval)
@@ -1755,10 +1937,14 @@ fn get_or_create_topic_session(
             .map(|d| d.display().to_string())
             .unwrap_or_default(),
         title: if tid > 0 {
-            format!("Topic #{}", tid)
+            format!("Thread #{}", tid)
         } else {
-            "Main Session".to_string()
+            "Main Thread".to_string()
         },
+        rank: 1,
+        archived: false,
+        step_count: 1,
+        last_thinking: String::new(),
         owner_user_id: guard.owner_user_id.unwrap_or(0),
         chat_id,
         topic_id,
@@ -1817,6 +2003,16 @@ pub fn send_telegram_html(
     html_text: &str,
     reply_markup: Option<Json>,
 ) -> Result<(), String> {
+    send_telegram_html_with_id(bot_token, chat_id, topic_id, html_text, reply_markup).map(|_| ())
+}
+
+pub fn send_telegram_html_with_id(
+    bot_token: &str,
+    chat_id: i64,
+    topic_id: Option<i64>,
+    html_text: &str,
+    reply_markup: Option<Json>,
+) -> Result<Option<i64>, String> {
     let mut fields = vec![
         ("chat_id", Json::Number(chat_id as f64)),
         ("text", Json::Str(html_text.to_string())),
@@ -1830,7 +2026,17 @@ pub fn send_telegram_html(
     if let Some(rm) = reply_markup {
         fields.push(("reply_markup", rm));
     }
-    telegram_api_call(bot_token, "sendMessage", &Json::obj(fields)).map(|_| ())
+    let resp = telegram_api_call(bot_token, "sendMessage", &Json::obj(fields))?;
+    Ok(resp.get("result").and_then(|r| r.get_i64("message_id")))
+}
+
+pub fn pin_telegram_message(bot_token: &str, chat_id: i64, message_id: i64) -> Result<(), String> {
+    let payload = Json::obj(vec![
+        ("chat_id", Json::Number(chat_id as f64)),
+        ("message_id", Json::Number(message_id as f64)),
+        ("disable_notification", Json::Bool(true)),
+    ]);
+    telegram_api_call(bot_token, "pinChatMessage", &payload).map(|_| ())
 }
 
 fn answer_callback(bot_token: &str, cb_id: &str, text: Option<&str>) -> Result<(), String> {

@@ -13,7 +13,7 @@
     "no_devices": "⚠️ You don't have any paired PC yet.\nRun <code>telegram-harness-manager pair</code> in your terminal and tap the pairing link.",
     "control_center_title": "⚙️ <b>Harness Control Center</b>",
     "control_center_body": "Select a project below to open a new conversation topic, configure default Harness/Model/Thinking/Permissions, or manage invited collaborators.",
-    "topic_config_bar": "🗂 <b>Project:</b> <code>{project}</code> · 💬 <b>Session:</b> <code>{title}</code>\n🔌 <b>Harness:</b> <code>{harness}</code> · 🤖 <b>Model:</b> <code>{model}</code>\n🧠 <b>Thinking:</b> <code>{thinking}</code> · 🛡️ <b>Permissions:</b> <code>{permissions}</code>",
+    "topic_config_bar": "📌 <b>Harness Thread Configuration</b>\n\n• <b>Project Name:</b> <code>{project}</code>\n• <b>Thread Name:</b> <code>{title}</code>\n• <b>Model:</b> <code>{model}</code> (<i>{harness}</i>)\n• <b>Thinking:</b> <code>{thinking}</code>\n• <b>Permissions:</b> <code>{permissions}</code>",
     "prompt_queued_owner": "⚡ <i>Task dispatched to {harness} ({model} · Thinking: {thinking} · Mode: {permissions}). You will receive the final output when finished.</i>",
     "prompt_held_for_approval": "✋ <b>Approval Required:</b> Your prompt on <code>{project}</code> has been sent to the project Owner for confirmation.",
     "owner_approval_card": "👤 <b>Collaborator Prompt Request</b>\n\n<b>From:</b> {author}\n<b>Project:</b> <code>{project}</code> (Topic: <code>{topic}</code>)\n<b>Requested Config:</b> 🤖 <code>{model}</code> · 🧠 <code>{thinking}</code> · 🛡️ <code>{permissions}</code>\n\n<blockquote>{prompt}</blockquote>",

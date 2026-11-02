@@ -13,7 +13,7 @@
     "no_devices": "⚠️ Non hai ancora nessun PC collegato.\nEsegui <code>telegram-harness-manager pair</code> nel terminale del PC e premi sul link di collegamento.",
     "control_center_title": "⚙️ <b>Control Center Harness</b>",
     "control_center_body": "Seleziona un progetto qui sotto per aprire un nuovo Topic di conversazione, configurare Harness/Modello/Thinking/Permessi predefiniti o gestire gli invitati.",
-    "topic_config_bar": "🗂 <b>Progetto:</b> <code>{project}</code> · 💬 <b>Sessione:</b> <code>{title}</code>\n🔌 <b>Harness:</b> <code>{harness}</code> · 🤖 <b>Modello:</b> <code>{model}</code>\n🧠 <b>Thinking:</b> <code>{thinking}</code> · 🛡️ <b>Permessi:</b> <code>{permissions}</code>",
+    "topic_config_bar": "📌 <b>Configurazione Thread Harness</b>\n\n• <b>Nome Progetto:</b> <code>{project}</code>\n• <b>Nome Thread:</b> <code>{title}</code>\n• <b>Modello:</b> <code>{model}</code> (<i>{harness}</i>)\n• <b>Thinking:</b> <code>{thinking}</code>\n• <b>Permessi:</b> <code>{permissions}</code>",
     "prompt_queued_owner": "⚡ <i>Prompt inviato a {harness} ({model} · Thinking: {thinking} · Permessi: {permissions}). Riceverai il messaggio con l'output appena avrà finito.</i>",
     "prompt_held_for_approval": "✋ <b>In attesa di approvazione:</b> Il tuo prompt su <code>{project}</code> è stato inviato all'Owner del progetto per la conferma manuale.",
     "owner_approval_card": "👤 <b>Richiesta Esecuzione Prompt da Collaboratore</b>\n\n<b>Da:</b> {author}\n<b>Progetto:</b> <code>{project}</code> (Topic: <code>{topic}</code>)\n<b>Configurazione richiesta:</b> 🤖 <code>{model}</code> · 🧠 <code>{thinking}</code> · 🛡️ <code>{permissions}</code>\n\n<blockquote>{prompt}</blockquote>",

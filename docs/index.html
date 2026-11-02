@@ -163,10 +163,21 @@
     <!-- TAB 1: PROJECTS & MULTI-CONVERSATION TOPICS -->
     <section id="view-topics" class="card">
       <div class="card-title">
-        <span id="lbl-projects-title">🗂 Projects & Active Conversation Topics</span>
-        <span class="badge" id="topic-count-badge">1 Project → N Topics</span>
+        <span id="lbl-projects-title">🗂 Thread Harness Attivi (Ordinati per Utilizzo)</span>
+        <span class="badge" id="topic-count-badge">1️⃣ → N</span>
       </div>
       <div id="conversations-list"></div>
+
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <div class="card-title" style="margin-bottom:8px;">
+          <span id="lbl-archived-title">📦 Thread Archiviati nell'Harness (Solo in Mini App)</span>
+          <button class="btn-outline" onclick="toggleArchivedList()" id="btn-toggle-archived">Mostra / Nascondi</button>
+        </div>
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;" id="lbl-archived-desc">
+          I thread archiviati nell'harness non appaiono nella lista topic di Telegram per mantenere la vista pulita, ma puoi aprirli e ispezionarli in qualsiasi momento da qui.
+        </p>
+        <div id="archived-conversations-list" style="display:block;"></div>
+      </div>
     </section>
 
     <!-- TAB 2: LAUNCH PROMPT WITH MODEL / THINKING / PERMISSIONS -->
@@ -369,34 +380,168 @@
       renderGuests();
     }
 
+    function rankToEmoji(rank) {
+      const map = ['0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
+      if (rank >= 1 && rank <= 10) return map[rank];
+      return String(rank).split('').map(d => map[Number(d)] || '#').join('');
+    }
+
+    function toggleArchivedList() {
+      const el = document.getElementById('archived-conversations-list');
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
     function renderConversations() {
       const container = document.getElementById('conversations-list');
-      const convs = dashboardState.conversations?.length ? dashboardState.conversations : [
+      const archivedContainer = document.getElementById('archived-conversations-list');
+      const defaultConvs = [
         {
-          id: 'conv-main',
+          id: '53044e90-cb45-438f-a43e-eb0363c7ddad',
+          rank: 1,
+          archived: false,
           projectName: 'telegram-harness-manager',
-          title: 'Multi-Harness Telegram Bot & Serverless Bridge',
+          title: 'Telegram Harness Manager Skill Creation',
           harness: 'antigravity',
           model: 'gemini-4-argon',
           thinking_level: 'medium',
           permission_mode: 'ask',
           status: 'ACTIVE',
-          stepCount: 6,
-          lastThinking: 'Verified Telegram Serverless V8 endpoints, multi-conversation Forum Topics, Model/Thinking/Permission controls, and Collaborator ACLs (Viewer, Proposer, Executor).'
+          stepCount: 85,
+          lastThinking: 'Thread #1 — Configurazione primo messaggio fissato (Nome Progetto, Nome Thread, Modello, Thinking, Permessi) + singoli prompt fissati nel thread.'
+        },
+        {
+          id: '5d229a2d-8222-4a2a-beb9-cbfdb3426fff',
+          rank: 2,
+          archived: false,
+          projectName: 'SmartCam',
+          title: 'Gestione PR Versione 2.1.1',
+          harness: 'antigravity',
+          model: 'gemini-4-argon',
+          thinking_level: 'medium',
+          permission_mode: 'ask',
+          status: 'ACTIVE',
+          stepCount: 28,
+          lastThinking: 'Thread #2 — Gestione PR e rilascio Versione 2.1.1 su SmartCam.'
+        },
+        {
+          id: 'a1bb0782-93a1-47c5-911b-0c9c05d45aeb',
+          rank: 3,
+          archived: false,
+          projectName: 'SmartCam',
+          title: 'Ottimizzazione Performance App Multiagente',
+          harness: 'antigravity',
+          model: 'gemini-4-argon',
+          thinking_level: 'medium',
+          permission_mode: 'ask',
+          status: 'ACTIVE',
+          stepCount: 42,
+          lastThinking: 'Thread #3 — Ottimizzazione pipeline multiagente e riduzione latenza.'
+        },
+        {
+          id: 'b749dadb-4075-43ea-aa10-d4e146be7a14',
+          rank: 4,
+          archived: false,
+          projectName: 'extended-markdown-editor',
+          title: 'Telegram Markdown Editor SPA',
+          harness: 'antigravity',
+          model: 'gemini-4-argon',
+          thinking_level: 'medium',
+          permission_mode: 'ask',
+          status: 'ACTIVE',
+          stepCount: 38,
+          lastThinking: 'Thread #4 — Editor Markdown SPA integrato con Telegram.'
+        },
+        {
+          id: 'b1ea1620-17d2-474e-bf48-b66bb177bbc8',
+          rank: 5,
+          archived: false,
+          projectName: 'Antigravity',
+          title: 'Android App For Google Antigravity',
+          harness: 'antigravity',
+          model: 'gemini-4-argon',
+          thinking_level: 'medium',
+          permission_mode: 'ask',
+          status: 'ACTIVE',
+          stepCount: 31,
+          lastThinking: 'Thread #5 — Client Android per Google Antigravity.'
+        },
+        {
+          id: '4e095458-de47-4810-91db-889c8021704f',
+          rank: 0,
+          archived: true,
+          projectName: 'SmartCam',
+          title: 'SmartCam Windows Virtual Camera Architecture',
+          harness: 'antigravity',
+          model: 'gemini-4-argon',
+          thinking_level: 'medium',
+          permission_mode: 'ask',
+          status: 'ARCHIVED',
+          stepCount: 64,
+          lastThinking: 'Thread Archiviato — Architettura Virtual Camera DirectShow/MediaFoundation su Windows.'
+        },
+        {
+          id: '7bf59f1f-b307-48bc-b8de-c1a2e4aa1847',
+          rank: 0,
+          archived: true,
+          projectName: 'SmartCam',
+          title: 'SmartCam App Debugging and Refinement',
+          harness: 'antigravity',
+          model: 'gemini-4-argon',
+          thinking_level: 'medium',
+          permission_mode: 'ask',
+          status: 'ARCHIVED',
+          stepCount: 51,
+          lastThinking: 'Thread Archiviato — Debugging frame pipeline e raffinamento UI SmartCam.'
+        },
+        {
+          id: '2408c116-be1c-424c-bb8a-6bd3877b7e34',
+          rank: 0,
+          archived: true,
+          projectName: 'PEFL-License',
+          title: 'Creating Custom Software License',
+          harness: 'antigravity',
+          model: 'gemini-4-argon',
+          thinking_level: 'medium',
+          permission_mode: 'ask',
+          status: 'ARCHIVED',
+          stepCount: 29,
+          lastThinking: 'Thread Archiviato — Redazione licenza PEFL v1.0 (Personal and Educational Free License).'
         }
       ];
 
-      container.innerHTML = convs.map(c => `
+      const allConvs = dashboardState.conversations?.length ? dashboardState.conversations : defaultConvs;
+      dashboardState.conversations = allConvs;
+
+      const activeConvs = allConvs.filter(c => !c.archived);
+      const archivedConvs = allConvs.filter(c => c.archived);
+
+      container.innerHTML = activeConvs.map((c, idx) => {
+        const emoji = rankToEmoji(c.rank || (idx + 1));
+        return `
         <div class="topic-item" onclick="selectConversation('${c.id || c.conversation_id}')">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-            <strong>📁 [${c.projectName || c.project_id}] 💬 ${c.title}</strong>
-            <span class="badge">${c.status || 'IDLE'}</span>
+            <strong>${emoji} ${c.title}</strong>
+            <span class="badge">${c.projectName || 'Project'}</span>
           </div>
           <div style="font-size:0.76rem;color:var(--muted);">
-            🔌 ${c.harness || 'antigravity'} · 🤖 ${c.model || 'gemini-4-argon'} · 🧠 ${c.thinking_level || 'medium'} · 🛡️ ${c.permission_mode || 'ask'}
+            🗂 Progetto: <code>${c.projectName || 'Project'}</code> · 🤖 ${c.model || 'gemini-4-argon'} · 🧠 ${c.thinking_level || 'medium'} · 🛡️ ${c.permission_mode || 'ask'}
           </div>
         </div>
-      `).join('');
+      `}).join('');
+
+      if (archivedContainer) {
+        archivedContainer.innerHTML = archivedConvs.length ? archivedConvs.map(c => `
+          <div class="topic-item" style="opacity:0.85;border-style:dashed;" onclick="selectConversation('${c.id || c.conversation_id}')">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <strong>📦 ${c.title}</strong>
+              <span class="badge" style="background:rgba(245,158,11,0.18);color:var(--warn);">ARCHIVED</span>
+            </div>
+            <div style="font-size:0.76rem;color:var(--muted);">
+              🗂 Progetto: <code>${c.projectName || 'Project'}</code> · 🤖 ${c.model || 'gemini-4-argon'} · 🧠 ${c.thinking_level || 'medium'} · 🛡️ ${c.permission_mode || 'ask'}
+            </div>
+          </div>
+        `).join('') : '<p style="font-size:0.78rem;color:var(--muted);">Nessun thread archiviato.</p>';
+      }
     }
 
     function selectConversation(id) {

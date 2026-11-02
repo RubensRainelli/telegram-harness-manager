@@ -151,8 +151,37 @@ fn run_detached_start(cfg: &BotConfig, state: &SharedBotState) {
     }
 
     let exe = env::current_exe().unwrap_or_else(|_| PathBuf::from("telegram-harness-manager"));
+    let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    #[cfg(target_os = "windows")]
+    {
+        // Use WMI Win32_Process.Create so the daemon is spawned outside any Harness Job Object
+        // and stays alive permanently without keeping any task open in Antigravity!
+        let ps_cmd = format!(
+            "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{{ CommandLine = '\"{}\" serve'; CurrentDirectory = '{}' }}; if ($r.ProcessId) {{ Write-Output $r.ProcessId }}",
+            exe.display(),
+            cwd.display()
+        );
+        if let Ok(out) = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &ps_cmd])
+            .output()
+        {
+            let pid_txt = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !pid_txt.is_empty() && pid_txt.chars().all(|c| c.is_ascii_digit()) {
+                let _ = fs::create_dir_all(".thm");
+                let _ = fs::write(".thm/daemon.pid", &pid_txt);
+                println!(
+                    "🚀 Telegram Harness Manager avviato in background indipendente (PID: {}, Porta: {}, Topic sincronizzati: {}).",
+                    pid_txt, DEFAULT_PORT, synced
+                );
+                return;
+            }
+        }
+    }
+
     let mut cmd = std::process::Command::new(exe);
     cmd.arg("serve")
+        .current_dir(&cwd)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
@@ -160,8 +189,8 @@ fn run_detached_start(cfg: &BotConfig, state: &SharedBotState) {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        // DETACHED_PROCESS (0x00000008) | CREATE_NO_WINDOW (0x08000000) | CREATE_NEW_PROCESS_GROUP (0x00000200)
-        cmd.creation_flags(0x08000208);
+        // CREATE_BREAKAWAY_FROM_JOB (0x01000000) | DETACHED_PROCESS (0x00000008) | CREATE_NO_WINDOW (0x08000000) | CREATE_NEW_PROCESS_GROUP (0x00000200)
+        cmd.creation_flags(0x09000208);
     }
 
     match cmd.spawn() {
@@ -484,19 +513,32 @@ fn handle_http_client(mut stream: TcpStream, cfg: BotConfig, state: SharedBotSta
 
 fn build_api_state(cfg: &BotConfig, state: &SharedBotState) -> Json {
     let guard = state.0.lock().unwrap();
-    let convs: Vec<Json> = guard
-        .sessions
-        .values()
+    let mut sess_list: Vec<_> = guard.sessions.values().cloned().collect();
+    sess_list.sort_by(|a, b| match (a.archived, b.archived) {
+        (false, true) => std::cmp::Ordering::Less,
+        (true, false) => std::cmp::Ordering::Greater,
+        _ => a.rank.cmp(&b.rank),
+    });
+
+    let convs: Vec<Json> = sess_list
+        .into_iter()
         .map(|s| {
             Json::obj(vec![
                 ("id", Json::Str(s.conversation_id.clone())),
                 ("projectName", Json::Str(s.project_name.clone())),
                 ("title", Json::Str(s.title.clone())),
+                ("rank", Json::Number(s.rank as f64)),
+                ("archived", Json::Bool(s.archived)),
+                ("stepCount", Json::Number(s.step_count as f64)),
+                ("lastThinking", Json::Str(s.last_thinking.clone())),
                 ("harness", Json::Str(s.harness.clone())),
                 ("model", Json::Str(s.model.clone())),
                 ("thinking_level", Json::Str(s.thinking_level.clone())),
                 ("permission_mode", Json::Str(s.permission_mode.clone())),
-                ("status", Json::Str("IDLE".into())),
+                (
+                    "status",
+                    Json::Str(if s.archived { "ARCHIVED" } else { "ACTIVE" }.into()),
+                ),
             ])
         })
         .collect();

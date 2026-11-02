@@ -46,12 +46,24 @@ pub struct TaskCompletionSummary {
 }
 
 #[derive(Clone, Debug)]
+pub struct PromptTurn {
+    pub index: usize,
+    pub user_prompt: String,
+    pub final_output: String,
+    pub thinking_summary: String,
+    pub tool_count: usize,
+}
+
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct DiscoveredConversation {
     pub conversation_id: String,
     pub project_name: String,
     pub workspace: String,
     pub title: String,
     pub harness: String,
+    pub archived: bool,
+    pub prompts: Vec<PromptTurn>,
     pub last_user_prompt: String,
     pub last_output: String,
     pub last_thinking: String,
@@ -75,10 +87,11 @@ pub fn available_models_for_harness(harness: &str) -> Vec<&'static str> {
     }
 }
 
-/// Scans `~/.gemini/antigravity/brain` for active/recent project conversations (excluding subagents)
-/// so each real conversation on the PC is automatically synced to a Telegram Forum Topic!
+/// Scans `~/.gemini/antigravity/brain` and `~/.gemini/antigravity/annotations/*.pbtxt`
+/// for Harness threads (both active and archived), ordered from most recently used to least recently used.
 pub fn scan_local_conversations(max_count: usize) -> Vec<DiscoveredConversation> {
     let brain_dir = get_antigravity_brain_dir();
+    let annotations_dir = get_antigravity_base_dir().join("annotations");
     let mut list: Vec<DiscoveredConversation> = Vec::new();
 
     let read_dir = match fs::read_dir(&brain_dir) {
@@ -105,62 +118,87 @@ pub fn scan_local_conversations(max_count: usize) -> Vec<DiscoveredConversation>
             continue;
         }
 
-        let updated_at = fs::metadata(&transcript_path)
+        let mtime_secs = fs::metadata(&transcript_path)
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .map(|d| d.as_secs())
             .unwrap_or(0);
 
-        if let Some(disc) = parse_conversation_transcript(&conv_id, &transcript_path, updated_at) {
+        let pbtxt_path = annotations_dir.join(format!("{}.pbtxt", conv_id));
+        let (pb_title, pb_archived, pb_last_view) = parse_antigravity_annotation(&pbtxt_path);
+
+        // Exclude subagent trajectories that do not have a user-facing thread annotation in `annotations/*.pbtxt`
+        let thread_title = match pb_title {
+            Some(t) if !t.trim().is_empty() => t,
+            _ => continue,
+        };
+
+        let updated_at = if pb_last_view > 0 {
+            pb_last_view
+        } else {
+            mtime_secs
+        };
+
+        if let Some(mut disc) = parse_conversation_transcript(&conv_id, &transcript_path, updated_at) {
+            disc.title = thread_title;
+            disc.archived = pb_archived;
             list.push(disc);
         }
     }
 
+    // Sort from most recently used to least recently used
     list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
     list.truncate(max_count);
+    list
+}
 
-    // Also scan sibling project directories in the parent workspace folder (e.g. `Dev/*`)
-    // so every current project on the PC has at least one Forum Topic thread on Telegram!
-    if let Ok(cwd) = env::current_dir() {
-        if let Some(parent_dev) = cwd.parent() {
-            if let Ok(rd) = fs::read_dir(parent_dev) {
-                for entry in rd.flatten() {
-                    let p = entry.path();
-                    if !p.is_dir() {
-                        continue;
-                    }
-                    let pname = match p.file_name().and_then(|n| n.to_str()) {
-                        Some(s) if !s.starts_with('.') => s.to_string(),
-                        _ => continue,
-                    };
-                    let already_present = list
-                        .iter()
-                        .any(|c| c.project_name.eq_ignore_ascii_case(&pname));
-                    if !already_present {
-                        let slug: String = pname
-                            .chars()
-                            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                            .collect();
-                        list.push(DiscoveredConversation {
-                            conversation_id: format!("proj_{}", slug),
-                            project_name: pname.clone(),
-                            workspace: p.display().to_string(),
-                            title: "Main Session".to_string(),
-                            harness: "antigravity".to_string(),
-                            last_user_prompt: format!("Workspace: {}", p.display()),
-                            last_output: "Progetto pronto per ricevere nuovi prompt da Telegram.".to_string(),
-                            last_thinking: "Sincronizzato automaticamente dalla cartella progetti.".to_string(),
-                            step_count: 1,
-                            updated_at: now_secs(),
-                        });
-                    }
+/// Parses `~/.gemini/antigravity/annotations/<conv_id>.pbtxt` for:
+/// - `title:"..."`
+/// - `archived:true`
+/// - `last_user_view_time:{seconds:<u64> ...}`
+fn parse_antigravity_annotation(pbtxt_path: &Path) -> (Option<String>, bool, u64) {
+    let raw = match fs::read_to_string(pbtxt_path) {
+        Ok(s) => s,
+        Err(_) => return (None, false, 0),
+    };
+
+    let mut title: Option<String> = None;
+    if let Some(pos) = raw.find("title:\"") {
+        let rest = &raw[pos + 7..];
+        let mut out = String::new();
+        let mut chars = rest.chars();
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                if let Some(next_c) = chars.next() {
+                    out.push(next_c);
                 }
+            } else if c == '"' {
+                break;
+            } else {
+                out.push(c);
+            }
+        }
+        if !out.trim().is_empty() {
+            title = Some(out.trim().to_string());
+        }
+    }
+
+    let archived = raw.contains("archived:true") || raw.contains("archived: true");
+
+    let mut last_view_secs = 0u64;
+    if let Some(vpos) = raw.find("last_user_view_time") {
+        let after = &raw[vpos..];
+        if let Some(spos) = after.find("seconds:") {
+            let num_part = after[spos + 8..].trim_start();
+            let digits: String = num_part.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(val) = digits.parse::<u64>() {
+                last_view_secs = val;
             }
         }
     }
 
-    list
+    (title, archived, last_view_secs)
 }
 
 fn parse_conversation_transcript(
@@ -176,22 +214,21 @@ fn parse_conversation_transcript(
     let mut last_thinking = String::new();
     let mut step_count = 0usize;
 
+    let mut prompts: Vec<PromptTurn> = Vec::new();
+    let mut cur_prompt_text = String::new();
+    let mut cur_output_text = String::new();
+    let mut cur_thinking_chunks: Vec<String> = Vec::new();
+    let mut cur_tool_count = 0usize;
+
     for line in content.lines() {
         if line.trim().is_empty() {
             continue;
         }
         step_count += 1;
 
-        if workspace.is_empty() && line.contains("Active Workspaces:") {
-            if let Some(pos) = line.find("Active Workspaces:") {
-                let snippet = &line[pos..];
-                for part in snippet.split("\\n") {
-                    let trimmed = part.trim_start_matches('-').trim();
-                    if trimmed.contains(":\\") || trimmed.starts_with('/') {
-                        workspace = trimmed.to_string();
-                        break;
-                    }
-                }
+        if workspace.is_empty() {
+            if let Some(ws) = extract_workspace_from_line(line) {
+                workspace = ws;
             }
         }
 
@@ -200,30 +237,90 @@ fn parse_conversation_transcript(
             if stype == "USER_INPUT" {
                 if let Some(raw_c) = step.get_str("content") {
                     let clean = clean_user_request_tags(raw_c);
-                    if !clean.is_empty() {
+                    // Ignore internal subagent wakeup notifications so only real user prompts become Pinned Turns
+                    if !clean.is_empty() && !raw_c.contains("<SUBAGENT_NOTIFICATION>") {
+                        if !cur_prompt_text.is_empty() {
+                            let idx = prompts.len() + 1;
+                            prompts.push(PromptTurn {
+                                index: idx,
+                                user_prompt: truncate_chars(&cur_prompt_text, 400),
+                                final_output: if cur_output_text.is_empty() {
+                                    "Completato.".to_string()
+                                } else {
+                                    truncate_chars(&cur_output_text, 750)
+                                },
+                                thinking_summary: if cur_thinking_chunks.is_empty() {
+                                    "Esecuzione diretta completata.".to_string()
+                                } else {
+                                    truncate_chars(&cur_thinking_chunks.join("\n• "), 550)
+                                },
+                                tool_count: cur_tool_count,
+                            });
+                        }
                         if first_prompt.is_empty() {
                             first_prompt = clean.lines().next().unwrap_or(&clean).trim().to_string();
                         }
-                        last_user_prompt = truncate_chars(&clean, 220);
+                        cur_prompt_text = clean.clone();
+                        cur_output_text.clear();
+                        cur_thinking_chunks.clear();
+                        cur_tool_count = 0;
+                        last_user_prompt = truncate_chars(&clean, 260);
                     }
                 }
             } else if stype == "PLANNER_RESPONSE" {
                 if let Some(c) = step.get_str("content") {
                     if !c.trim().is_empty() {
+                        cur_output_text = c.trim().to_string();
                         last_output = truncate_chars(c.trim(), 600);
                     }
                 }
                 if let Some(th) = step.get_str("thinking") {
                     if !th.trim().is_empty() {
+                        let short_th = truncate_chars(th.trim(), 220);
+                        cur_thinking_chunks.push(short_th.clone());
                         last_thinking = truncate_chars(th.trim(), 400);
                     }
+                }
+                if let Some(tcs) = step.get_arr("tool_calls") {
+                    cur_tool_count += tcs.len();
                 }
             }
         }
     }
 
+    if !cur_prompt_text.is_empty() {
+        let idx = prompts.len() + 1;
+        prompts.push(PromptTurn {
+            index: idx,
+            user_prompt: truncate_chars(&cur_prompt_text, 400),
+            final_output: if cur_output_text.is_empty() {
+                "In elaborazione / pronto.".to_string()
+            } else {
+                truncate_chars(&cur_output_text, 750)
+            },
+            thinking_summary: if cur_thinking_chunks.is_empty() {
+                "Elaborazione contesto in corso.".to_string()
+            } else {
+                truncate_chars(&cur_thinking_chunks.join("\n• "), 550)
+            },
+            tool_count: cur_tool_count,
+        });
+    }
+
     if step_count == 0 || first_prompt.is_empty() {
         return None;
+    }
+
+    if workspace.is_empty() {
+        let full_path = transcript_path.with_file_name("transcript_full.jsonl");
+        if let Ok(full_raw) = fs::read_to_string(&full_path) {
+            for line in full_raw.lines().take(50) {
+                if let Some(ws) = extract_workspace_from_line(line) {
+                    workspace = ws;
+                    break;
+                }
+            }
+        }
     }
 
     let project_name = if !workspace.is_empty() {
@@ -239,7 +336,7 @@ fn parse_conversation_transcript(
     let title = if !first_prompt.is_empty() {
         truncate_chars(&first_prompt, 48)
     } else {
-        format!("Session {}", &conv_id[..conv_id.len().min(8)])
+        format!("Thread {}", &conv_id[..conv_id.len().min(8)])
     };
 
     Some(DiscoveredConversation {
@@ -248,12 +345,44 @@ fn parse_conversation_transcript(
         workspace,
         title,
         harness: "antigravity".to_string(),
+        archived: false,
+        prompts,
         last_user_prompt,
         last_output,
         last_thinking,
         step_count,
         updated_at,
     })
+}
+
+fn extract_workspace_from_line(line: &str) -> Option<String> {
+    for marker in [
+        "\\Dev\\",
+        "/Dev/",
+        "\\\\Dev\\\\",
+        "github.com/RubensRainelli/",
+    ] {
+        if let Some(pos) = line.find(marker) {
+            let after = &line[pos + marker.len()..];
+            let proj: String = after
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
+                .collect();
+            if !proj.is_empty() && proj.len() >= 2 {
+                let home = env::var("USERPROFILE")
+                    .or_else(|_| env::var("HOME"))
+                    .unwrap_or_else(|_| "C:\\Users\\User".to_string());
+                return Some(
+                    PathBuf::from(home)
+                        .join("Dev")
+                        .join(proj)
+                        .display()
+                        .to_string(),
+                );
+            }
+        }
+    }
+    None
 }
 
 fn clean_user_request_tags(raw: &str) -> String {
@@ -431,16 +560,9 @@ pub fn extract_completion_summary(conv_id: &str) -> Option<TaskCompletionSummary
     let mut files_touched: Vec<String> = Vec::new();
 
     for line in content.lines() {
-        if workspace.is_empty() && line.contains("Active Workspaces:") {
-            if let Some(pos) = line.find("Active Workspaces:") {
-                let snippet = &line[pos..];
-                for part in snippet.split("\\n") {
-                    let trimmed = part.trim_start_matches('-').trim();
-                    if trimmed.contains(":\\") || trimmed.starts_with('/') {
-                        workspace = trimmed.to_string();
-                        break;
-                    }
-                }
+        if workspace.is_empty() {
+            if let Some(ws) = extract_workspace_from_line(line) {
+                workspace = ws;
             }
         }
 
@@ -479,6 +601,18 @@ pub fn extract_completion_summary(conv_id: &str) -> Option<TaskCompletionSummary
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if workspace.is_empty() {
+        let full_path = transcript_path.with_file_name("transcript_full.jsonl");
+        if let Ok(full_raw) = fs::read_to_string(&full_path) {
+            for line in full_raw.lines().take(50) {
+                if let Some(ws) = extract_workspace_from_line(line) {
+                    workspace = ws;
+                    break;
                 }
             }
         }
